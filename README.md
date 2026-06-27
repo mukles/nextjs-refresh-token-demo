@@ -4,7 +4,7 @@ A small, self-contained **Next.js (App Router)** app that shows how to do refres
 tokens *properly*: **httpOnly cookies**, **refresh-token rotation**, and
 **reuse (theft) detection** — the part most tutorials skip.
 
-Backed by **MongoDB via Prisma** (one `docker compose up` away). Clone it, run it,
+Backed by **MongoDB via Prisma** (a free Atlas cluster). Clone it, run it,
 read it top-to-bottom.
 
 > Built as the companion to a LinkedIn post: "How to manage refresh tokens in Next.js."
@@ -40,8 +40,9 @@ and they're not sent cross-site (CSRF mitigation).
 ```bash
 npm install
 
-# 1. Start MongoDB (single-node replica set on host port 27018 — Prisma needs a replica set)
-npm run db:up
+# 1. Point at a MongoDB Atlas cluster (free M0 works; it's already a replica set,
+#    which Prisma requires). Then set DATABASE_URL:
+cp .env.example .env       # edit DATABASE_URL + JWT_SECRET
 
 # 2. Sync the schema and seed the demo user
 npm run db:push
@@ -51,10 +52,11 @@ npm run db:seed
 npm run dev          # http://localhost:3000
 ```
 
-The connection string lives in `.env` (`DATABASE_URL`). The container is mapped to host
-port **27018** so it won't clash with a local MongoDB already on 27017.
+The connection string lives in `.env` (`DATABASE_URL`). A free
+[MongoDB Atlas](https://www.mongodb.com/cloud/atlas) M0 cluster is the easiest option and
+is already a replica set; the same string works locally and on Vercel.
 
-Handy scripts: `npm run db:down` (stop Mongo) · `npm run db:studio` (Prisma Studio).
+Handy script: `npm run db:studio` (Prisma Studio).
 
 Login is prefilled with the seeded demo user:
 
@@ -96,7 +98,6 @@ lib/
 prisma/
   schema.prisma  User + RefreshToken models (MongoDB)
   seed.mjs       seeds the demo user
-docker-compose.yml  local MongoDB single-node replica set
 proxy.ts         protects /dashboard (Next 16's renamed middleware, Node.js runtime)
 ```
 
