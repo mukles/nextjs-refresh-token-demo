@@ -39,8 +39,22 @@ and they're not sent cross-site (CSRF mitigation).
 
 ```bash
 npm install
+
+# 1. Start MongoDB (single-node replica set on host port 27018 — Prisma needs a replica set)
+npm run db:up
+
+# 2. Sync the schema and seed the demo user
+npm run db:push
+npm run db:seed
+
+# 3. Go
 npm run dev          # http://localhost:3000
 ```
+
+The connection string lives in `.env` (`DATABASE_URL`). The container is mapped to host
+port **27018** so it won't clash with a local MongoDB already on 27017.
+
+Handy scripts: `npm run db:down` (stop Mongo) · `npm run db:studio` (Prisma Studio).
 
 Login is prefilled with the seeded demo user:
 
@@ -73,12 +87,17 @@ app/
   login/page.tsx                   shadcn/ui login form
   dashboard/page.tsx               protected UI: countdown, buttons, live activity log
 lib/
-  auth.ts        jose sign/verify (Edge-safe) + cookie writers + TTLs
+  auth.ts        jose sign/verify + cookie writers + TTLs
   tokens.ts      issueRefreshToken / rotateRefreshToken + reuse detection  ← the core
-  db.ts          in-memory user + refresh-token store (swap for a real DB)
+  db.ts          Prisma-backed user + refresh-token queries
+  prisma.ts      PrismaClient singleton (hot-reload safe)
   validation.ts  zod request schemas
   api-client.ts  browser fetch wrapper that does the silent refresh-on-401
-proxy.ts         protects /dashboard at the Edge (Next 16's renamed middleware)
+prisma/
+  schema.prisma  User + RefreshToken models (MongoDB)
+  seed.mjs       seeds the demo user
+docker-compose.yml  local MongoDB single-node replica set
+proxy.ts         protects /dashboard (Next 16's renamed middleware, Node.js runtime)
 ```
 
 The whole rotation/theft story lives in [`lib/tokens.ts`](lib/tokens.ts) — start there.
@@ -113,8 +132,8 @@ the user must log in again. That's the point.
 
 Kept out to keep the lesson focused — add these for production:
 
-- **Real persistence** — `lib/db.ts` is in-memory and resets on restart. Use Postgres
-  for users and Postgres/Redis (with TTLs) for refresh tokens.
+- **Token-store hardening** — refresh tokens persist in MongoDB, but for production add
+  a TTL index on `expiresAt` (or Redis) so expired rows are reaped automatically.
 - **CSRF token** — `SameSite=Lax` covers this demo; add a CSRF token for sensitive POSTs.
 - **Secret management** — `JWT_SECRET` falls back to a dev string; set a real one via env.
 - OAuth/social login, email verification, multi-device session listing.
@@ -123,5 +142,6 @@ Kept out to keep the lesson focused — add these for production:
 
 ## Stack
 
-Next.js 16 (App Router) · TypeScript · [`jose`](https://github.com/panva/jose) (Edge-safe JWT) ·
-`bcryptjs` · [`zod`](https://zod.dev) · [shadcn/ui](https://ui.shadcn.com) · Tailwind CSS.
+Next.js 16 (App Router) · TypeScript · [Prisma](https://www.prisma.io) + MongoDB ·
+[`jose`](https://github.com/panva/jose) (JWT) · `bcryptjs` · [`zod`](https://zod.dev) ·
+[shadcn/ui](https://ui.shadcn.com) · Tailwind CSS.
