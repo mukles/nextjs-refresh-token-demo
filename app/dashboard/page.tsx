@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { fetchWithAutoRefresh } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,8 @@ export default function DashboardPage() {
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
   const [log, setLog] = useState<string[]>([]);
+  const [calling, setCalling] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const addLog = useCallback((line: string) => {
     const time = new Date().toLocaleTimeString();
@@ -46,28 +49,38 @@ export default function DashboardPage() {
   );
 
   const callProtected = useCallback(async () => {
-    const { res, didRefresh } = await fetchWithAutoRefresh("/api/auth/me");
-    if (!res.ok) return handleAuthFailure(res);
+    setCalling(true);
+    try {
+      const { res, didRefresh } = await fetchWithAutoRefresh("/api/auth/me");
+      if (!res.ok) return handleAuthFailure(res);
 
-    const data = await res.json();
-    setUser(data.user);
-    setExpiresAt(data.accessTokenExpiresAt ?? null);
-    if (didRefresh) {
-      addLog("Access token was expired → silently refreshed, then retried ✅");
-      toast.success("Access token silently refreshed");
-    } else {
-      addLog("Protected API call succeeded with current access token ✅");
+      const data = await res.json();
+      setUser(data.user);
+      setExpiresAt(data.accessTokenExpiresAt ?? null);
+      if (didRefresh) {
+        addLog("Access token was expired → silently refreshed, then retried ✅");
+        toast.success("Access token silently refreshed");
+      } else {
+        addLog("Protected API call succeeded with current access token ✅");
+      }
+    } finally {
+      setCalling(false);
     }
   }, [addLog, handleAuthFailure]);
 
   const forceRefresh = useCallback(async () => {
-    const res = await fetch("/api/auth/refresh", { method: "POST" });
-    if (!res.ok) return handleAuthFailure(res);
-    const data = await res.json();
-    setUser(data.user);
-    addLog("Forced /api/auth/refresh → refresh token ROTATED 🔁");
-    toast.success("Refreshed — refresh-token value rotated");
-    callProtected();
+    setRefreshing(true);
+    try {
+      const res = await fetch("/api/auth/refresh", { method: "POST" });
+      if (!res.ok) return handleAuthFailure(res);
+      const data = await res.json();
+      setUser(data.user);
+      addLog("Forced /api/auth/refresh → refresh token ROTATED 🔁");
+      toast.success("Refreshed — refresh-token value rotated");
+      await callProtected();
+    } finally {
+      setRefreshing(false);
+    }
   }, [addLog, handleAuthFailure, callProtected]);
 
   const logout = useCallback(async () => {
@@ -124,8 +137,16 @@ export default function DashboardPage() {
       </Card>
 
       <div className="flex flex-wrap gap-3">
-        <Button onClick={callProtected}>Call protected API</Button>
-        <Button variant="secondary" onClick={forceRefresh}>
+        <Button onClick={callProtected} disabled={calling || refreshing}>
+          {calling && <Loader2 className="animate-spin" />}
+          Call protected API
+        </Button>
+        <Button
+          variant="secondary"
+          onClick={forceRefresh}
+          disabled={calling || refreshing}
+        >
+          {refreshing && <Loader2 className="animate-spin" />}
           Force refresh (rotate)
         </Button>
       </div>
