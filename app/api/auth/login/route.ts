@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const user = findUserByEmail(parsed.data.email);
+  const user = await findUserByEmail(parsed.data.email);
   const passwordOk =
     user && (await bcrypt.compare(parsed.data.password, user.passwordHash));
 
@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
   }
 
   const accessToken = await signAccessToken(user);
-  const refresh = issueRefreshToken(user.id);
+  const refresh = await issueRefreshToken(user.id);
 
   const res = NextResponse.json({
     user: { id: user.id, email: user.email, name: user.name },

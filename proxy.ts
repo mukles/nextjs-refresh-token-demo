@@ -18,13 +18,11 @@ export async function proxy(req: NextRequest) {
 
   const presented = req.cookies.get(REFRESH_COOKIE)?.value;
   const rotation = presented
-    ? rotateRefreshToken(presented)
+    ? await rotateRefreshToken(presented)
     : ({ status: "invalid" } as const);
 
-  console.log({ rotation });
-
   if (rotation.status === "rotated") {
-    const user = findUserById(rotation.userId);
+    const user = await findUserById(rotation.userId);
     if (user) {
       const accessToken = await signAccessToken(user);
 

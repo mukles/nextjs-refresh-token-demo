@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No refresh token." }, { status: 401 });
   }
 
-  const result = rotateRefreshToken(presented);
+  const result = await rotateRefreshToken(presented);
 
   if (result.status === "reuse_detected") {
     const res = NextResponse.json(
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
     return res;
   }
 
-  const user = findUserById(result.userId);
+  const user = await findUserById(result.userId);
   if (!user) {
     const res = NextResponse.json(
       { error: "User not found." },
