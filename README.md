@@ -4,7 +4,8 @@ A small, self-contained **Next.js (App Router)** app that shows how to do refres
 tokens *properly*: **httpOnly cookies**, **refresh-token rotation**, and
 **reuse (theft) detection** — the part most tutorials skip.
 
-No database, no extra services. Clone it, run it, read it top-to-bottom.
+Backed by **MongoDB via Prisma** (one `docker compose up` away). Clone it, run it,
+read it top-to-bottom.
 
 > Built as the companion to a LinkedIn post: "How to manage refresh tokens in Next.js."
 
