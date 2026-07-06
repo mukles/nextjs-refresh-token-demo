@@ -3,6 +3,13 @@ export type AutoRefreshResult = {
   didRefresh: boolean;
 };
 
+export async function apiClientFetch(
+  url: string,
+  init?: RequestInit,
+): Promise<Response> {
+  return fetch(url, init);
+}
+
 export async function fetchWithAutoRefresh(
   url: string,
   init?: RequestInit,
