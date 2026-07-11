@@ -1,42 +1,50 @@
 import { NextResponse, type NextRequest } from "next/server";
 import {
   ACCESS_COOKIE,
-  REFRESH_COOKIE,
   clearAuthCookies,
-  setAccessCookie,
-  setRefreshCookie,
-  signAccessToken,
-  verifyAccessToken,
+  COOKIE_OPTS,
+  decodeAccessToken,
+  REFRESH_COOKIE,
 } from "@/lib/auth";
-import { findUserById } from "@/lib/db";
-import { rotateRefreshToken } from "@/lib/tokens";
 
-export async function proxy(req: NextRequest) {
-  const claims = await verifyAccessToken(req.cookies.get(ACCESS_COOKIE)?.value);
+const SKEW_SECONDS = 0;
 
-  if (claims) return NextResponse.next();
+export async function proxy(request: NextRequest) {
+  const claims = decodeAccessToken(request.cookies.get(ACCESS_COOKIE)?.value);
 
-  const presented = req.cookies.get(REFRESH_COOKIE)?.value;
-  const rotation = presented
-    ? await rotateRefreshToken(presented)
-    : ({ status: "invalid" } as const);
+  const now = Math.floor(Date.now() / 1000);
+  const isExpired = claims?.exp ? claims.exp + SKEW_SECONDS < now : true;
 
-  if (rotation.status === "rotated") {
-    const user = await findUserById(rotation.userId);
-    if (user) {
-      const accessToken = await signAccessToken(user);
+  if (claims && !isExpired) {
+    return NextResponse.next();
+  }
 
-      req.cookies.set(ACCESS_COOKIE, accessToken);
-      const res = NextResponse.next({ request: { headers: req.headers } });
+  if (isExpired) {
+    const refreshRes = await fetch(
+      `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/api/auth/refresh`,
+      {
+        method: "POST",
+        headers: request.headers,
+      },
+    );
+    const tokens = await refreshRes.json().catch(() => ({}));
 
-      setAccessCookie(res, accessToken);
-      setRefreshCookie(res, rotation.next.token);
-      return res;
+    if (tokens) {
+      // 1) Make the rotated tokens visible to THIS request's SSR render.
+      request.cookies.set(ACCESS_COOKIE, tokens.accessToken);
+      request.cookies.set(REFRESH_COOKIE, tokens.refreshToken);
+      const response = NextResponse.next({
+        request: { headers: request.headers },
+      });
+      // 2) Persist them to the browser.
+      response.cookies.set(ACCESS_COOKIE, tokens.accessToken, COOKIE_OPTS);
+      response.cookies.set(REFRESH_COOKIE, tokens.refreshToken, COOKIE_OPTS);
+      return response;
     }
   }
 
-  const loginUrl = new URL("/login", req.url);
-  loginUrl.searchParams.set("from", req.nextUrl.pathname);
+  const loginUrl = new URL("/login", request.url);
+  loginUrl.searchParams.set("from", request.nextUrl.pathname);
   const res = NextResponse.redirect(loginUrl);
   clearAuthCookies(res);
   return res;
