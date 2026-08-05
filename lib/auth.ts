@@ -1,59 +1,86 @@
-import { decodeJwt, type JWTPayload } from "jose";
+import "server-only";
+import { cookies } from "next/headers";
 import type { NextResponse } from "next/server";
 
 export const ACCESS_COOKIE = "access_token";
 export const REFRESH_COOKIE = "refresh_token";
 
-export const COOKIE_OPTS = {
+const isProd = process.env.NODE_ENV === "production";
+
+const FALLBACK_MAX_AGE = 60 * 5; // 5 minutes
+
+const cookieOptions = {
   httpOnly: true,
+  secure: isProd,
   sameSite: "lax" as const,
-  secure: process.env.NODE_ENV === "production",
   path: "/",
 };
 
-export type AccessTokenClaims = JWTPayload & {
-  sub: string;
-  mobile: string;
-  role: string;
-  sessionId: string;
-};
-
-export function decodeAccessToken(
-  token: string | undefined,
-): AccessTokenClaims | null {
-  if (!token) return null;
+function decodeJwtExpiry(token: string): number | undefined {
   try {
-    return decodeJwt(token) as AccessTokenClaims;
+    const payloadPart = token.split(".")[1];
+    if (!payloadPart) return undefined;
+    const json = Buffer.from(payloadPart, "base64url").toString("utf8");
+    const payload = JSON.parse(json) as { exp?: number };
+    return typeof payload.exp === "number" ? payload.exp : undefined;
   } catch {
-    return null;
+    return undefined;
   }
 }
 
-const baseCookie = {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: "lax" as const,
-};
+function maxAgeFromToken(token: string): number {
+  const exp = decodeJwtExpiry(token);
+  if (exp === undefined) return FALLBACK_MAX_AGE;
+
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const remaining = exp - nowSeconds;
+  return remaining > 0 ? remaining : 0;
+}
 
 export function setAccessCookie(res: NextResponse, token: string): void {
   res.cookies.set(ACCESS_COOKIE, token, {
-    ...baseCookie,
-    path: "/",
+    ...cookieOptions,
+    maxAge: maxAgeFromToken(token),
   });
 }
 
 export function setRefreshCookie(res: NextResponse, token: string): void {
   res.cookies.set(REFRESH_COOKIE, token, {
-    ...baseCookie,
-    path: "/",
+    ...cookieOptions,
+    maxAge: maxAgeFromToken(token),
   });
 }
 
 export function clearAuthCookies(res: NextResponse): void {
-  res.cookies.set(ACCESS_COOKIE, "", { ...baseCookie, path: "/", maxAge: 0 });
-  res.cookies.set(REFRESH_COOKIE, "", {
-    ...baseCookie,
-    path: "/",
-    maxAge: 0,
+  res.cookies.set(ACCESS_COOKIE, "", { ...cookieOptions, maxAge: 0 });
+  res.cookies.set(REFRESH_COOKIE, "", { ...cookieOptions, maxAge: 0 });
+}
+
+// --- Server Action variants: mutate the current request's cookie jar directly ---
+// (cookies().set() is only legal inside Server Actions / Route Handlers.)
+
+export async function setAccessCookieDirect(token: string): Promise<void> {
+  const cookieStore = await cookies();
+  cookieStore.set(ACCESS_COOKIE, token, {
+    ...cookieOptions,
+    maxAge: maxAgeFromToken(token),
   });
+}
+
+export async function setRefreshCookieDirect(token: string): Promise<void> {
+  const cookieStore = await cookies();
+  cookieStore.set(REFRESH_COOKIE, token, {
+    ...cookieOptions,
+    maxAge: maxAgeFromToken(token),
+  });
+}
+
+export async function getAccessToken(): Promise<string | undefined> {
+  const cookieStore = await cookies();
+  return cookieStore.get(ACCESS_COOKIE)?.value;
+}
+
+export async function getRefreshToken(): Promise<string | undefined> {
+  const cookieStore = await cookies();
+  return cookieStore.get(REFRESH_COOKIE)?.value;
 }

@@ -15,10 +15,6 @@ export default async function DashboardPage() {
     cache: "no-store",
   });
 
-  const me = await readJsonSafely<MeApiResponse>(meRes);
-
-  const session = await readJsonSafely<SessionApiResponse>(sessionRes);
-
   return (
     <>
       {/* <section className="mx-auto mt-6 flex w-full max-w-2xl flex-col gap-3 px-6 text-sm">

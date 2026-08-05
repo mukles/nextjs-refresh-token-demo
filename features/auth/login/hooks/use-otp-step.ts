@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 import { OTP_LENGTH } from "../constants";
-import { sendOtp, verifyOtp } from "../lib/api";
+import { sendOtp, verifyOtp } from "../../../../lib/api";
 
 export function useOtpStep(mobile: string, redirectTo: string) {
   const router = useRouter();
