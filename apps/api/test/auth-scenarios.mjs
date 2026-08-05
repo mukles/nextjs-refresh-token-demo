@@ -9,6 +9,7 @@ const child = spawn(process.execPath, ["dist/main.js"], {
     PORT: String(port),
     ACCESS_TOKEN_TTL_SECONDS: "1",
     REFRESH_TOKEN_TTL_SECONDS: "4",
+    REFRESH_TOKEN_GRACE_SECONDS: "1",
   },
   stdio: ["ignore", "pipe", "pipe"],
 });
@@ -137,6 +138,7 @@ try {
       (await request("/auth/refresh", { jar, method: "POST" })).status === 200,
       "first rotation failed",
     );
+    await new Promise((resolve) => setTimeout(resolve, 1100));
     const replayJar = new Map([["refresh_token", stolenRefresh]]);
     assert(
       (await request("/auth/refresh", { jar: replayJar, method: "POST" }))
@@ -164,7 +166,7 @@ try {
     );
   });
 
-  await scenario("fails closed on concurrent refresh requests", async () => {
+  await scenario("makes concurrent refresh requests idempotent", async () => {
     const jar = new Map();
     await login(jar);
     const cookie = `refresh_token=${cookieValue(jar, "refresh_token")}`;
@@ -178,14 +180,24 @@ try {
         headers: { Cookie: cookie },
       }),
     ]);
-    const statuses = [first.status, second.status].sort();
     assert(
-      statuses[0] === 200 && statuses[1] === 401,
-      `expected 200/401, got ${statuses.join("/")}`,
+      first.status === 200 && second.status === 200,
+      `expected 200/200, got ${first.status}/${second.status}`,
     );
+    const firstJar = new Map();
+    const secondJar = new Map();
+    applyCookies(first, firstJar);
+    applyCookies(second, secondJar);
     assert(
-      (await request("/students/profile", { jar })).status === 401,
-      "raced session was not revoked",
+      cookieValue(firstJar, "refresh_token") ===
+        cookieValue(secondJar, "refresh_token"),
+      "concurrent requests did not receive the same replacement token",
+    );
+    jar.set("access_token", cookieValue(firstJar, "access_token"));
+    jar.set("refresh_token", cookieValue(firstJar, "refresh_token"));
+    assert(
+      (await request("/students/profile", { jar })).status === 200,
+      "concurrent refresh revoked the valid session",
     );
   });
 

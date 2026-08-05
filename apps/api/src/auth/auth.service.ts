@@ -23,6 +23,10 @@ export function refreshTokenTtlSeconds(): number {
   );
 }
 
+export function refreshTokenGraceSeconds(): number {
+  return positiveSeconds(process.env.REFRESH_TOKEN_GRACE_SECONDS, 10);
+}
+
 type TokenPair = { accessToken: string; refreshToken: string };
 type StudentProfile = {
   _id: string;
@@ -216,27 +220,40 @@ export class AuthService {
 
   private async rotateLocalRefreshToken(record: RefreshToken) {
     if (record.used) {
-      await this.invalidateSession(record.userId, record.familyId);
-      throw new UnauthorizedException({
-        error: "Refresh token reuse detected; session revoked",
-        code: "REUSE_DETECTED",
-      });
+      return this.resolveUsedRefreshToken(record);
     }
     if (record.expiresAt.getTime() <= Date.now()) {
       await this.invalidateSession(record.userId, record.familyId);
       throw new UnauthorizedException("Refresh token expired");
     }
 
+    // Create first so a process crash after claiming can never leave concurrent
+    // requests pointing at a replacement that does not exist.
+    const candidate = await this.issueRefreshToken(
+      record.userId,
+      record.familyId,
+    );
+    const usedAt = new Date();
     const claimed = await this.prisma.refreshToken.updateMany({
       where: { id: record.id, used: false },
-      data: { used: true },
+      data: {
+        used: true,
+        usedAt,
+        replacedByToken: candidate.token,
+      },
     });
     if (claimed.count !== 1) {
-      await this.invalidateSession(record.userId, record.familyId);
-      throw new UnauthorizedException({
-        error: "Refresh token reuse detected; session revoked",
-        code: "REUSE_DETECTED",
+      // Logout or a newer login may already have deleted the candidate.
+      await this.prisma.refreshToken.deleteMany({
+        where: { id: candidate.id },
       });
+      const claimedRecord = await this.prisma.refreshToken.findUnique({
+        where: { id: record.id },
+      });
+      if (!claimedRecord) {
+        throw new UnauthorizedException("Session is no longer active");
+      }
+      return this.resolveUsedRefreshToken(claimedRecord);
     }
 
     const user = await this.prisma.user.findUnique({
@@ -247,11 +264,45 @@ export class AuthService {
       throw new UnauthorizedException("Session is no longer active");
     }
 
-    const next = await this.issueRefreshToken(record.userId, record.familyId);
     return {
       accessToken: await this.signAccessToken(user, record.familyId),
-      refreshToken: next.token,
+      refreshToken: candidate.token,
     };
+  }
+
+  private async resolveUsedRefreshToken(
+    record: RefreshToken,
+  ): Promise<TokenPair> {
+    const graceMilliseconds = refreshTokenGraceSeconds() * 1000;
+    const withinGrace =
+      record.usedAt !== null &&
+      Date.now() - record.usedAt.getTime() <= graceMilliseconds;
+
+    if (withinGrace && record.replacedByToken) {
+      const [replacement, user] = await Promise.all([
+        this.prisma.refreshToken.findUnique({
+          where: { token: record.replacedByToken },
+        }),
+        this.prisma.user.findUnique({ where: { id: record.userId } }),
+      ]);
+      if (
+        replacement &&
+        !replacement.used &&
+        replacement.expiresAt.getTime() > Date.now() &&
+        user?.sessionId === record.familyId
+      ) {
+        return {
+          accessToken: await this.signAccessToken(user, record.familyId),
+          refreshToken: replacement.token,
+        };
+      }
+    }
+
+    await this.invalidateSession(record.userId, record.familyId);
+    throw new UnauthorizedException({
+      error: "Refresh token reuse detected; session revoked",
+      code: "REUSE_DETECTED",
+    });
   }
 
   private async invalidateSession(userId: string, familyId: string) {

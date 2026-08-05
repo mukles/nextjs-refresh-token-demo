@@ -2,7 +2,7 @@
 
 A Turborepo containing a **Next.js (App Router)** web app and a **NestJS** API.
 The existing web app shows how to do refresh
-tokens *properly*: **httpOnly cookies**, **refresh-token rotation**, and
+tokens _properly_: **httpOnly cookies**, **refresh-token rotation**, and
 **reuse (theft) detection** — the part most tutorials skip.
 
 Backed by **MongoDB via Prisma** (a free Atlas cluster). Clone it, run it,
@@ -16,10 +16,10 @@ read it top-to-bottom.
 
 Two tokens, two very different jobs:
 
-| Token | What it is | Lifetime | Stored in | Job |
-|-------|-----------|----------|-----------|-----|
-| **Access token** | A signed **JWT** | **60s** (short!) | httpOnly cookie, `Path=/` | Proves who you are and identifies the one active session. |
-| **Refresh token** | An **opaque random string** | 7 days | httpOnly cookie, `Path=/` | Used *only* to mint a new access token. Lives server-side so it can be revoked. |
+| Token             | What it is                  | Lifetime         | Stored in                 | Job                                                                             |
+| ----------------- | --------------------------- | ---------------- | ------------------------- | ------------------------------------------------------------------------------- |
+| **Access token**  | A signed **JWT**            | **60s** (short!) | httpOnly cookie, `Path=/` | Proves who you are and identifies the one active session.                       |
+| **Refresh token** | An **opaque random string** | 7 days           | httpOnly cookie, `Path=/` | Used _only_ to mint a new access token. Lives server-side so it can be revoked. |
 
 Both cookies are `HttpOnly` + `SameSite=Lax` → **JavaScript can't read them** (XSS-safe)
 and they're not sent cross-site (CSRF mitigation).
@@ -30,7 +30,7 @@ and they're not sent cross-site (CSRF mitigation).
 - **Opaque refresh token (not a JWT)** → its only power is "look me up in the store,"
   so the server stays in full control and can revoke any session instantly.
 - **Rotation** → every refresh swaps the refresh token for a brand-new one.
-- **Reuse detection** → if an *old* (already-rotated) refresh token ever shows up
+- **Reuse detection** → if an _old_ (already-rotated) refresh token ever shows up
   again, that's a stolen copy being replayed → we burn the **entire token family**,
   logging out both attacker and victim. They re-authenticate; the thief is locked out.
 
@@ -67,7 +67,12 @@ Token lifetimes are configured in backend seconds:
 ```env
 ACCESS_TOKEN_TTL_SECONDS=60
 REFRESH_TOKEN_TTL_SECONDS=604800
+REFRESH_TOKEN_GRACE_SECONDS=10
 ```
+
+The grace window makes simultaneous refreshes from multiple tabs idempotent: each
+request receives the same rotated token. Reusing the old token after the window still
+revokes the entire session as a likely theft attempt.
 
 Handy script: `npm run db:studio` (Prisma Studio).
 
@@ -97,7 +102,7 @@ password: password123
 2. Click **Call protected API** before it expires → succeeds with the current token.
 3. Let it hit `expired`, then click **Call protected API** again → the call 401s, the
    client **silently refreshes** and retries. You stay logged in. (Toast: "Access token silently refreshed".)
-4. Click **Force refresh (rotate)** → the refresh-token *value* changes every time.
+4. Click **Force refresh (rotate)** → the refresh-token _value_ changes every time.
 5. **Prove it's httpOnly:** DevTools → Application → Cookies shows `access_token` /
    `refresh_token` with **HttpOnly** checked. Type `document.cookie` in the console —
    they don't appear.
@@ -153,7 +158,7 @@ curl -s -b "refresh_token=$RT_OLD" -X POST $B/auth/refresh
 # → 401 {"error":"Refresh token reuse detected...","code":"REUSE_DETECTED"}
 ```
 
-After that, even the *current* refresh token is dead (the whole family was burned) —
+After that, even the _current_ refresh token is dead (the whole family was burned) —
 the user must log in again. That's the point.
 
 ---
