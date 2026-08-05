@@ -6,8 +6,22 @@ import { PrismaService } from "../prisma.service";
 
 export const ACCESS_COOKIE = "access_token";
 export const REFRESH_COOKIE = "refresh_token";
-export const ACCESS_TOKEN_TTL_SECONDS = 60;
-export const REFRESH_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 7;
+
+function positiveSeconds(value: string | undefined, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+export function accessTokenTtlSeconds(): number {
+  return positiveSeconds(process.env.ACCESS_TOKEN_TTL_SECONDS, 60);
+}
+
+export function refreshTokenTtlSeconds(): number {
+  return positiveSeconds(
+    process.env.REFRESH_TOKEN_TTL_SECONDS,
+    60 * 60 * 24 * 7,
+  );
+}
 
 type TokenPair = { accessToken: string; refreshToken: string };
 type StudentProfile = {
@@ -165,7 +179,7 @@ export class AuthService {
       .setProtectedHeader({ alg: "HS256" })
       .setSubject(user.id)
       .setIssuedAt()
-      .setExpirationTime(`${ACCESS_TOKEN_TTL_SECONDS}s`)
+      .setExpirationTime(`${accessTokenTtlSeconds()}s`)
       .sign(this.jwtSecret());
   }
 
@@ -184,7 +198,7 @@ export class AuthService {
         token: `${crypto.randomUUID()}.${crypto.randomUUID()}`,
         familyId,
         userId,
-        expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_SECONDS * 1000),
+        expiresAt: new Date(Date.now() + refreshTokenTtlSeconds() * 1000),
       },
     });
   }

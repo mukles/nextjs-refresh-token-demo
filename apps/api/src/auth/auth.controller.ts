@@ -19,10 +19,10 @@ import {
 import type { Request, Response } from "express";
 import {
   ACCESS_COOKIE,
-  ACCESS_TOKEN_TTL_SECONDS,
+  accessTokenTtlSeconds,
   AuthService,
   REFRESH_COOKIE,
-  REFRESH_TOKEN_TTL_SECONDS,
+  refreshTokenTtlSeconds,
 } from "./auth.service";
 
 type Credentials = { email?: string; password?: string };
@@ -147,14 +147,14 @@ export class AuthController {
       secure,
       sameSite: "lax",
       path: "/",
-      maxAge: ACCESS_TOKEN_TTL_SECONDS * 1000,
+      maxAge: accessTokenTtlSeconds() * 1000,
     });
     response.cookie(REFRESH_COOKIE, tokens.refreshToken, {
       httpOnly: true,
       secure,
       sameSite: "lax",
       path: "/",
-      maxAge: REFRESH_TOKEN_TTL_SECONDS * 1000,
+      maxAge: refreshTokenTtlSeconds() * 1000,
     });
   }
 

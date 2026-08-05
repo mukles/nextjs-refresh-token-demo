@@ -63,6 +63,13 @@ contains only `NEXT_PUBLIC_API_URL`. A free
 [MongoDB Atlas](https://www.mongodb.com/cloud/atlas) M0 cluster is the easiest option and
 is already a replica set; the same string works locally and on Vercel.
 
+Token lifetimes are configured in backend seconds:
+
+```env
+ACCESS_TOKEN_TTL_SECONDS=60
+REFRESH_TOKEN_TTL_SECONDS=604800
+```
+
 Handy script: `npm run db:studio` (Prisma Studio).
 
 Login is prefilled with the seeded demo user:
