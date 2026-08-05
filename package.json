@@ -13,6 +13,7 @@
     "start": "turbo run start",
     "typecheck": "turbo run typecheck",
     "test:auth": "turbo run test:auth --filter=@repo/api",
+    "test:web": "turbo run test:e2e --filter=@repo/web",
     "db:up": "turbo run db:up --filter=@repo/api",
     "db:down": "turbo run db:down --filter=@repo/api",
     "db:push": "turbo run db:push --filter=@repo/api",

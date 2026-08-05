@@ -19,7 +19,7 @@ export function useOtpStep(mobile: string, redirectTo: string) {
     try {
       const { ok, data } = await verifyOtp(mobile, otp);
       if (!ok) {
-        toast.error(data.error ?? "Invalid OTP");
+        toast.error(data.message ?? data.error ?? "Invalid OTP");
         return;
       }
       toast.success(data.message ?? "Authenticated!");
@@ -40,7 +40,7 @@ export function useOtpStep(mobile: string, redirectTo: string) {
         toast.success("OTP resent!");
         setOtp("");
       } else {
-        toast.error(data.error ?? "Failed to resend OTP");
+        toast.error(data.message ?? data.error ?? "Failed to resend OTP");
       }
     } catch {
       toast.error("Something went wrong.");

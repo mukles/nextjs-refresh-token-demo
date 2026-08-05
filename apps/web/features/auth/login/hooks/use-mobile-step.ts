@@ -15,7 +15,7 @@ export function useMobileStep(onSuccess: (mobile: string) => void) {
     try {
       const { ok, data } = await sendOtp(mobile);
       if (!ok) {
-        toast.error(data.error ?? "Failed to send OTP");
+        toast.error(data.message ?? data.error ?? "Failed to send OTP");
         return;
       }
       toast.success("OTP sent to your number!");

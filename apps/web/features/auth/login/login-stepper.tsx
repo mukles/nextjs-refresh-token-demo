@@ -11,7 +11,13 @@ import type { Step } from "./types";
 
 export function LoginStepper() {
   const params = useSearchParams();
-  const redirectTo = params.get("from") ?? DEFAULT_REDIRECT;
+  const requestedRedirect = params.get("from");
+  const redirectTo =
+    requestedRedirect?.startsWith("/") &&
+    !requestedRedirect.startsWith("//") &&
+    !requestedRedirect.includes("\\")
+      ? requestedRedirect
+      : DEFAULT_REDIRECT;
   const [step, setStep] = useState<Step>(0);
   const [mobile, setMobile] = useState("");
 

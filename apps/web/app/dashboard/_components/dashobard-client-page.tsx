@@ -172,11 +172,11 @@ export function DashboardClient() {
   const fetchProfile = useCallback(async () => {
     const { res, didRefresh } =
       await backendFetchWithAutoRefresh("/students/profile");
-    if (!res.ok) return;
+    if (!res.ok) return handleAuthFailure(res);
     const data = (await res.json()) as StudentProfile;
     setProfile(data);
     if (didRefresh) addLog("Profile fetched after silent token refresh ✅");
-  }, [addLog]);
+  }, [addLog, handleAuthFailure]);
 
   const callProtected = useCallback(async () => {
     setCalling(true);

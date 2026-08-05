@@ -75,11 +75,14 @@ Run the automated authentication failure scenarios while local MongoDB is runnin
 
 ```bash
 npm run test:auth
+npm run test:web
 ```
 
-The suite covers missing and expired refresh tokens, invalid OTP, access-token expiry,
-rotation, replay detection, concurrent refresh races, newest-device-only sessions, and
-logout invalidation.
+The backend suite covers missing and expired refresh tokens, rotation, replay detection,
+concurrent refresh races, newest-device-only sessions, and logout invalidation. The
+Playwright frontend suite starts isolated Next.js and NestJS servers and covers route
+protection, login and OTP errors, API outages, secure cookies, safe redirects, silent
+refresh, missing refresh cookies, device eviction, logout, and client refresh deduplication.
 
 Login is prefilled with the seeded demo user:
 

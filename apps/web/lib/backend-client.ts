@@ -13,6 +13,13 @@ export function backendFetch(path: string, init?: RequestInit) {
 
 let refreshInFlight: Promise<Response> | undefined;
 
+function unavailableResponse() {
+  return Response.json(
+    { error: "Backend API is unavailable", code: "API_UNAVAILABLE" },
+    { status: 503 },
+  );
+}
+
 function refreshSession(): Promise<Response> {
   refreshInFlight ??= backendFetch("/auth/refresh", { method: "POST" }).finally(
     () => {
@@ -26,14 +33,28 @@ export async function backendFetchWithAutoRefresh(
   path: string,
   init?: RequestInit,
 ): Promise<{ res: Response; didRefresh: boolean }> {
-  let res = await backendFetch(path, init);
+  let res: Response;
+  try {
+    res = await backendFetch(path, init);
+  } catch {
+    return { res: unavailableResponse(), didRefresh: false };
+  }
   if (res.status !== 401) return { res, didRefresh: false };
 
-  const refreshResponse = await refreshSession();
+  let refreshResponse: Response;
+  try {
+    refreshResponse = await refreshSession();
+  } catch {
+    return { res: unavailableResponse(), didRefresh: false };
+  }
   if (!refreshResponse.ok) {
     return { res: refreshResponse, didRefresh: false };
   }
 
-  res = await backendFetch(path, init);
+  try {
+    res = await backendFetch(path, init);
+  } catch {
+    return { res: unavailableResponse(), didRefresh: false };
+  }
   return { res, didRefresh: true };
 }
