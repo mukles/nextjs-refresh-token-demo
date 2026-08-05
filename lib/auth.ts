@@ -1,4 +1,5 @@
 import "server-only";
+import { decodeJwt, type JWTPayload } from "jose";
 import { cookies } from "next/headers";
 import type { NextResponse } from "next/server";
 
@@ -15,6 +16,16 @@ const cookieOptions = {
   sameSite: "lax" as const,
   path: "/",
 };
+
+export function decodeAccessToken(token?: string): JWTPayload | undefined {
+  if (!token) return undefined;
+
+  try {
+    return decodeJwt(token);
+  } catch {
+    return undefined;
+  }
+}
 
 function decodeJwtExpiry(token: string): number | undefined {
   try {

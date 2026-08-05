@@ -2,9 +2,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import {
   ACCESS_COOKIE,
   clearAuthCookies,
-  COOKIE_OPTS,
   decodeAccessToken,
   REFRESH_COOKIE,
+  setAccessCookie,
+  setRefreshCookie,
 } from "@/lib/auth";
 
 const SKEW_SECONDS = 0;
@@ -37,8 +38,8 @@ export async function proxy(request: NextRequest) {
         request: { headers: request.headers },
       });
       // 2) Persist them to the browser.
-      response.cookies.set(ACCESS_COOKIE, tokens.accessToken, COOKIE_OPTS);
-      response.cookies.set(REFRESH_COOKIE, tokens.refreshToken, COOKIE_OPTS);
+      setAccessCookie(response, tokens.accessToken);
+      setRefreshCookie(response, tokens.refreshToken);
       return response;
     }
   }
