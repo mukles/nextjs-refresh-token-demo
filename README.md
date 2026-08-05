@@ -18,7 +18,7 @@ Two tokens, two very different jobs:
 
 | Token | What it is | Lifetime | Stored in | Job |
 |-------|-----------|----------|-----------|-----|
-| **Access token** | A signed **JWT** | **60s** (short!) | httpOnly cookie, `Path=/` | Proves who you are on every request. Verified with no DB hit. |
+| **Access token** | A signed **JWT** | **60s** (short!) | httpOnly cookie, `Path=/` | Proves who you are and identifies the one active session. |
 | **Refresh token** | An **opaque random string** | 7 days | httpOnly cookie, `Path=/` | Used *only* to mint a new access token. Lives server-side so it can be revoked. |
 
 Both cookies are `HttpOnly` + `SameSite=Lax` → **JavaScript can't read them** (XSS-safe)
@@ -54,14 +54,13 @@ npm run db:seed
 # 4. Start both apps through Turbo
 npm run dev
 # web: http://localhost:3000
-# api: http://localhost:3001 (health: /health)
+# api: http://localhost:3001 (health: /api/v1/health)
 # Swagger UI: http://localhost:3001/docs
 ```
 
-The connection string and JWT secret live only in `apps/api/.env`. The frontend
-contains only `NEXT_PUBLIC_API_URL`. A free
-[MongoDB Atlas](https://www.mongodb.com/cloud/atlas) M0 cluster is the easiest option and
-is already a replica set; the same string works locally and on Vercel.
+The connection string and JWT secret live only in `apps/api/.env.local`. The frontend
+contains only `NEXT_PUBLIC_API_URL`. The included local MongoDB service runs as a
+single-node replica set, which Prisma needs for transactions.
 
 Token lifetimes are configured in backend seconds:
 
@@ -71,6 +70,16 @@ REFRESH_TOKEN_TTL_SECONDS=604800
 ```
 
 Handy script: `npm run db:studio` (Prisma Studio).
+
+Run the automated authentication failure scenarios while local MongoDB is running:
+
+```bash
+npm run test:auth
+```
+
+The suite covers missing and expired refresh tokens, invalid OTP, access-token expiry,
+rotation, replay detection, concurrent refresh races, newest-device-only sessions, and
+logout invalidation.
 
 Login is prefilled with the seeded demo user:
 

@@ -94,10 +94,18 @@ export class AuthController {
     @Res({ passthrough: true }) response: Response,
   ) {
     const refreshToken = readCookie(request, REFRESH_COOKIE);
-    if (!refreshToken) throw new UnauthorizedException("No refresh token");
-    const tokens = await this.authService.refresh(refreshToken);
-    this.setAuthCookies(response, tokens);
-    return { refreshed: true };
+    if (!refreshToken) {
+      this.clearAuthCookies(response);
+      throw new UnauthorizedException("No refresh token");
+    }
+    try {
+      const tokens = await this.authService.refresh(refreshToken);
+      this.setAuthCookies(response, tokens);
+      return { refreshed: true };
+    } catch (error) {
+      this.clearAuthCookies(response);
+      throw error;
+    }
   }
 
   @Post("logout")

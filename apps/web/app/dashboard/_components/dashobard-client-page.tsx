@@ -12,7 +12,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { backendFetch } from "@/lib/backend-client";
+import {
+  backendFetch,
+  backendFetchWithAutoRefresh,
+} from "@/lib/backend-client";
 import type { StudentProfile } from "@/lib/student-profile";
 
 type Me = { id: string; name: string; mobile: string };
@@ -48,22 +51,6 @@ async function internalFetch(
   init?: RequestInit,
 ): Promise<Response> {
   return backendFetch(path, init);
-}
-
-async function internalFetchWithAutoRefresh(
-  path: string,
-  init?: RequestInit,
-): Promise<{ res: Response; didRefresh: boolean }> {
-  let res = await internalFetch(path, init);
-  if (res.status !== 401) return { res, didRefresh: false };
-
-  const refreshRes = await internalFetch("/auth/refresh", {
-    method: "POST",
-  });
-  if (!refreshRes.ok) return { res: refreshRes, didRefresh: false };
-
-  res = await internalFetch(path, init);
-  return { res, didRefresh: true };
 }
 
 function ProfileCard({ profile }: { profile: StudentProfile }) {
@@ -183,9 +170,8 @@ export function DashboardClient() {
   );
 
   const fetchProfile = useCallback(async () => {
-    const { res, didRefresh } = await internalFetchWithAutoRefresh(
-      "/students/profile",
-    );
+    const { res, didRefresh } =
+      await backendFetchWithAutoRefresh("/students/profile");
     if (!res.ok) return;
     const data = (await res.json()) as StudentProfile;
     setProfile(data);
@@ -195,8 +181,7 @@ export function DashboardClient() {
   const callProtected = useCallback(async () => {
     setCalling(true);
     try {
-      const { res, didRefresh } =
-        await internalFetchWithAutoRefresh("/auth/me");
+      const { res, didRefresh } = await backendFetchWithAutoRefresh("/auth/me");
       if (!res.ok) return handleAuthFailure(res);
 
       const data = (await res.json()) as MeResponse;

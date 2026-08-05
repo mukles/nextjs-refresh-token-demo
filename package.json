@@ -12,6 +12,7 @@
     "lint": "turbo run lint",
     "start": "turbo run start",
     "typecheck": "turbo run typecheck",
+    "test:auth": "turbo run test:auth --filter=@repo/api",
     "db:up": "turbo run db:up --filter=@repo/api",
     "db:down": "turbo run db:down --filter=@repo/api",
     "db:push": "turbo run db:push --filter=@repo/api",

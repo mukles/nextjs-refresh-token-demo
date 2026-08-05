@@ -8,6 +8,7 @@
     "start": "node dist/main.js",
     "lint": "eslint \"{src,test}/**/*.ts\"",
     "typecheck": "tsc --noEmit",
+    "test:auth": "npm run build && node test/auth-scenarios.mjs",
     "postinstall": "prisma generate",
     "db:up": "docker compose -f ../../compose.yaml up -d --wait mongodb",
     "db:down": "docker compose -f ../../compose.yaml down",

@@ -17,6 +17,10 @@
       "dependsOn": ["transit"],
       "outputs": []
     },
+    "test:auth": {
+      "cache": false,
+      "dependsOn": ["build"]
+    },
     "transit": {
       "dependsOn": ["^transit"]
     },

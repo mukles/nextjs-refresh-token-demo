@@ -12,6 +12,7 @@ model User {
   email         String         @unique
   name          String
   mobileNumber  String?
+  sessionId     String?
   passwordHash  String
   refreshTokens RefreshToken[]
   createdAt     DateTime       @default(now())

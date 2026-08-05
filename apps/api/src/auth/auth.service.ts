@@ -97,9 +97,7 @@ export class AuthService {
       where: { token: refreshToken },
     });
     if (record) {
-      await this.prisma.refreshToken.deleteMany({
-        where: { familyId: record.familyId },
-      });
+      await this.invalidateSession(record.userId, record.familyId);
     }
   }
 
@@ -118,19 +116,9 @@ export class AuthService {
       throw new UnauthorizedException("Invalid access token session");
     }
 
-    const [user, activeSession] = await Promise.all([
-      this.prisma.user.findUnique({ where: { id: subject } }),
-      this.prisma.refreshToken.findFirst({
-        where: {
-          userId: subject,
-          familyId: sessionId,
-          used: false,
-          expiresAt: { gt: new Date() },
-        },
-      }),
-    ]);
+    const user = await this.prisma.user.findUnique({ where: { id: subject } });
     if (!user) throw new UnauthorizedException("User not found");
-    if (!activeSession) {
+    if (user.sessionId !== sessionId) {
       throw new UnauthorizedException({
         error: "This session was replaced by a login on another device",
         code: "SESSION_REPLACED",
@@ -204,10 +192,22 @@ export class AuthService {
   }
 
   private async createExclusiveSession(user: User): Promise<TokenPair> {
-    await this.prisma.refreshToken.deleteMany({
-      where: { userId: user.id },
-    });
-    const refresh = await this.issueRefreshToken(user.id);
+    const familyId = crypto.randomUUID();
+    const [, , refresh] = await this.prisma.$transaction([
+      this.prisma.refreshToken.deleteMany({ where: { userId: user.id } }),
+      this.prisma.user.update({
+        where: { id: user.id },
+        data: { sessionId: familyId },
+      }),
+      this.prisma.refreshToken.create({
+        data: {
+          token: `${crypto.randomUUID()}.${crypto.randomUUID()}`,
+          familyId,
+          userId: user.id,
+          expiresAt: new Date(Date.now() + refreshTokenTtlSeconds() * 1000),
+        },
+      }),
+    ]);
     return {
       accessToken: await this.signAccessToken(user, refresh.familyId),
       refreshToken: refresh.token,
@@ -216,32 +216,51 @@ export class AuthService {
 
   private async rotateLocalRefreshToken(record: RefreshToken) {
     if (record.used) {
-      await this.prisma.refreshToken.deleteMany({
-        where: { familyId: record.familyId },
-      });
+      await this.invalidateSession(record.userId, record.familyId);
       throw new UnauthorizedException({
         error: "Refresh token reuse detected; session revoked",
         code: "REUSE_DETECTED",
       });
     }
     if (record.expiresAt.getTime() <= Date.now()) {
-      await this.prisma.refreshToken.delete({ where: { id: record.id } });
+      await this.invalidateSession(record.userId, record.familyId);
       throw new UnauthorizedException("Refresh token expired");
     }
 
-    const [, user] = await Promise.all([
-      this.prisma.refreshToken.update({
-        where: { id: record.id },
-        data: { used: true },
-      }),
-      this.prisma.user.findUnique({ where: { id: record.userId } }),
-    ]);
-    if (!user) throw new UnauthorizedException("User not found");
+    const claimed = await this.prisma.refreshToken.updateMany({
+      where: { id: record.id, used: false },
+      data: { used: true },
+    });
+    if (claimed.count !== 1) {
+      await this.invalidateSession(record.userId, record.familyId);
+      throw new UnauthorizedException({
+        error: "Refresh token reuse detected; session revoked",
+        code: "REUSE_DETECTED",
+      });
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: record.userId },
+    });
+    if (!user || user.sessionId !== record.familyId) {
+      await this.invalidateSession(record.userId, record.familyId);
+      throw new UnauthorizedException("Session is no longer active");
+    }
 
     const next = await this.issueRefreshToken(record.userId, record.familyId);
     return {
       accessToken: await this.signAccessToken(user, record.familyId),
       refreshToken: next.token,
     };
+  }
+
+  private async invalidateSession(userId: string, familyId: string) {
+    await this.prisma.$transaction([
+      this.prisma.refreshToken.deleteMany({ where: { familyId } }),
+      this.prisma.user.updateMany({
+        where: { id: userId, sessionId: familyId },
+        data: { sessionId: null },
+      }),
+    ]);
   }
 }
