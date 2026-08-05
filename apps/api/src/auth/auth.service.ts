@@ -48,13 +48,10 @@ export class AuthService {
             passwordHash: await bcrypt.hash(crypto.randomUUID(), 10),
           },
         });
-    const refresh = await this.issueRefreshToken(user.id);
+    const tokens = await this.createExclusiveSession(user);
     return {
       body: { message: "OTP verified successfully" },
-      tokens: {
-        accessToken: await this.signAccessToken(user),
-        refreshToken: refresh.token,
-      },
+      tokens,
     };
   }
 
@@ -64,11 +61,10 @@ export class AuthService {
       throw new UnauthorizedException("Invalid email or password");
     }
 
-    const accessToken = await this.signAccessToken(user);
-    const refresh = await this.issueRefreshToken(user.id);
+    const tokens = await this.createExclusiveSession(user);
     return {
       body: { user: { id: user.id, email: user.email, name: user.name } },
-      tokens: { accessToken, refreshToken: refresh.token },
+      tokens,
     };
   }
 
@@ -96,16 +92,36 @@ export class AuthService {
   async getProfile(accessToken: string): Promise<StudentProfile> {
     const secret = this.jwtSecret();
     let subject: string | undefined;
+    let sessionId: string | undefined;
     try {
       const { payload } = await jwtVerify(accessToken, secret);
       subject = payload.sub;
+      sessionId = typeof payload.sid === "string" ? payload.sid : undefined;
     } catch {
       throw new UnauthorizedException("Access token missing or expired");
     }
-    if (!subject) throw new UnauthorizedException("Invalid access token");
+    if (!subject || !sessionId) {
+      throw new UnauthorizedException("Invalid access token session");
+    }
 
-    const user = await this.prisma.user.findUnique({ where: { id: subject } });
+    const [user, activeSession] = await Promise.all([
+      this.prisma.user.findUnique({ where: { id: subject } }),
+      this.prisma.refreshToken.findFirst({
+        where: {
+          userId: subject,
+          familyId: sessionId,
+          used: false,
+          expiresAt: { gt: new Date() },
+        },
+      }),
+    ]);
     if (!user) throw new UnauthorizedException("User not found");
+    if (!activeSession) {
+      throw new UnauthorizedException({
+        error: "This session was replaced by a login on another device",
+        code: "SESSION_REPLACED",
+      });
+    }
 
     return {
       _id: user.id,
@@ -139,11 +155,12 @@ export class AuthService {
     };
   }
 
-  private async signAccessToken(user: User) {
+  private async signAccessToken(user: User, sessionId: string) {
     return new SignJWT({
       email: user.email,
       name: user.name,
       mobile: user.mobileNumber,
+      sid: sessionId,
     })
       .setProtectedHeader({ alg: "HS256" })
       .setSubject(user.id)
@@ -172,6 +189,17 @@ export class AuthService {
     });
   }
 
+  private async createExclusiveSession(user: User): Promise<TokenPair> {
+    await this.prisma.refreshToken.deleteMany({
+      where: { userId: user.id },
+    });
+    const refresh = await this.issueRefreshToken(user.id);
+    return {
+      accessToken: await this.signAccessToken(user, refresh.familyId),
+      refreshToken: refresh.token,
+    };
+  }
+
   private async rotateLocalRefreshToken(record: RefreshToken) {
     if (record.used) {
       await this.prisma.refreshToken.deleteMany({
@@ -198,7 +226,7 @@ export class AuthService {
 
     const next = await this.issueRefreshToken(record.userId, record.familyId);
     return {
-      accessToken: await this.signAccessToken(user),
+      accessToken: await this.signAccessToken(user, record.familyId),
       refreshToken: next.token,
     };
   }
