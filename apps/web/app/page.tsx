@@ -1,8 +1,6 @@
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
-
-const ACCESS_COOKIE = "access_token";
-const REFRESH_COOKIE = "refresh_token";
+import { ACCESS_COOKIE, REFRESH_COOKIE } from "@/lib/auth/constants";
 
 export default async function Home() {
   const jar = await cookies();

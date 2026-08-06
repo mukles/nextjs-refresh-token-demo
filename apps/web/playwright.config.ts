@@ -24,7 +24,7 @@ export default defineConfig({
       timeout: 60_000,
     },
     {
-      command: `NEXT_PUBLIC_API_URL=http://127.0.0.1:${apiPort}/api/v1 npx next dev --port ${webPort} --hostname 127.0.0.1`,
+      command: `NEXT_TEST_DIST_DIR=.next-playwright API_BASE_URL=http://127.0.0.1:${apiPort}/api/v1 NEXT_PUBLIC_API_URL=http://127.0.0.1:${apiPort}/api/v1 npx next dev --port ${webPort} --hostname 127.0.0.1`,
       cwd: ".",
       url: `http://127.0.0.1:${webPort}/login`,
       reuseExistingServer: false,

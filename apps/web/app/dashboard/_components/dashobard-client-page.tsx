@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Loader2, User, MapPin, School, BookOpen } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { ACCESS_COOKIE, REFRESH_COOKIE } from "@/lib/auth/constants";
 import {
   Card,
   CardContent,
@@ -309,7 +310,7 @@ export function DashboardClient() {
 
       <p className="text-xs text-muted-foreground">
         Tip: open DevTools → Application → Cookies. You will see{" "}
-        <code>access_token</code> and <code>refresh_token</code> marked{" "}
+        <code>{ACCESS_COOKIE}</code> and <code>{REFRESH_COOKIE}</code> marked{" "}
         <strong>HttpOnly</strong>. Run <code>document.cookie</code> in the
         console — they will not appear. That is the XSS protection.
       </p>

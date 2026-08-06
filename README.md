@@ -58,6 +58,10 @@ npm run dev
 # Swagger UI: http://localhost:3001/docs
 ```
 
+The client dashboard is at `/dashboard`. A protected Server Component example is at
+`/dashboard/server`; Proxy refreshes an expired access token before that SSR page calls
+the NestJS profile endpoint.
+
 The connection string and JWT secret live only in `apps/api/.env.local`. The frontend
 contains only `NEXT_PUBLIC_API_URL`. The included local MongoDB service runs as a
 single-node replica set, which Prisma needs for transactions.

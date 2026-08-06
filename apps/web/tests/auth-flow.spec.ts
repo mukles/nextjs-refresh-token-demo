@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { ACCESS_COOKIE, REFRESH_COOKIE } from "../lib/auth/constants";
 
 const API_PATTERN = "**/api/v1/**";
 
@@ -75,17 +76,17 @@ test("login creates secure HttpOnly cookies and blocks an external redirect", as
   await expect(page).toHaveURL(/\/dashboard$/);
 
   const cookies = await context.cookies();
-  for (const name of ["access_token", "refresh_token"]) {
+  for (const name of [ACCESS_COOKIE, REFRESH_COOKIE]) {
     const cookie = cookies.find((candidate) => candidate.name === name);
     expect(cookie, `${name} cookie`).toBeTruthy();
     expect(cookie?.httpOnly).toBe(true);
     expect(cookie?.sameSite).toBe("Lax");
   }
   expect(await page.evaluate(() => document.cookie)).not.toContain(
-    "access_token",
+    ACCESS_COOKIE,
   );
   expect(await page.evaluate(() => document.cookie)).not.toContain(
-    "refresh_token",
+    REFRESH_COOKIE,
   );
 });
 
@@ -104,13 +105,38 @@ test("an expired access token silently refreshes and retries once", async ({
   expect(refreshCalls).toBe(1);
 });
 
+test("Proxy refreshes an expired token before protected SSR", async ({
+  page,
+  context,
+}) => {
+  await signIn(page, "01641146786");
+  const before = (await context.cookies()).find(
+    (cookie) => cookie.name === ACCESS_COOKIE,
+  )?.value;
+  expect(before).toBeTruthy();
+  await page.waitForTimeout(2_300);
+
+  await page.goto("/dashboard/server");
+  await expect(page).toHaveURL(/\/dashboard\/server$/);
+  await expect(
+    page.getByRole("heading", { name: "Server-rendered profile" }),
+  ).toBeVisible();
+  await expect(page.getByText("Student 6786")).toBeVisible();
+
+  const after = (await context.cookies()).find(
+    (cookie) => cookie.name === ACCESS_COOKIE,
+  )?.value;
+  expect(after).toBeTruthy();
+  expect(after).not.toBe(before);
+});
+
 test("missing refresh cookie redirects an expired session to login", async ({
   page,
   context,
 }) => {
   await signIn(page, "01641146783");
   const access = (await context.cookies()).find(
-    (cookie) => cookie.name === "access_token",
+    (cookie) => cookie.name === ACCESS_COOKIE,
   );
   await context.clearCookies();
   expect(access).toBeTruthy();
