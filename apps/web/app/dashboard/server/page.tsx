@@ -1,7 +1,9 @@
+import { connection } from "next/server";
 import { getServerProfile } from "@/lib/auth/server/student-profile";
 import { ServerProfile } from "./_components/server-profile";
 
 export default async function ServerProfilePage() {
+  await connection();
   const result = await getServerProfile();
 
   return (
