@@ -1,9 +1,6 @@
 import { createBackendTransport } from "@/lib/backend";
 
-export const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api/v1";
-
-export const backendFetch = createBackendTransport(API_URL, {
+export const backendFetch = createBackendTransport("/api/backend", {
   credentials: "include",
 });
 
