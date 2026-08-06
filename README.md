@@ -71,10 +71,9 @@ Token lifetimes are configured in backend seconds:
 ```env
 ACCESS_TOKEN_TTL_SECONDS=60
 REFRESH_TOKEN_TTL_SECONDS=604800
-REFRESH_TOKEN_GRACE_SECONDS=10
 ```
 
-The grace window makes simultaneous refreshes from multiple tabs idempotent: each
+The 10-second grace window makes simultaneous refreshes from multiple tabs idempotent: each
 request receives the same rotated token. Reusing the old token after the window still
 revokes the entire session as a likely theft attempt.
 

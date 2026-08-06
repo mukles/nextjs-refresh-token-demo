@@ -17,7 +17,7 @@ export default defineConfig({
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: [
     {
-      command: `npm run build && PORT=${apiPort} WEB_ORIGIN=http://127.0.0.1:${webPort} ACCESS_TOKEN_TTL_SECONDS=2 REFRESH_TOKEN_TTL_SECONDS=30 REFRESH_TOKEN_GRACE_SECONDS=2 npm run start`,
+      command: `npm run build && PORT=${apiPort} WEB_ORIGIN=http://127.0.0.1:${webPort} ACCESS_TOKEN_TTL_SECONDS=2 REFRESH_TOKEN_TTL_SECONDS=30 npm run start`,
       cwd: "../api",
       url: `http://127.0.0.1:${apiPort}/api/v1/health`,
       reuseExistingServer: false,

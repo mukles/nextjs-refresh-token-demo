@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { CartLine, Product } from "@/lib/store-types";
 import { storeRequest } from "@/lib/store-api";
@@ -29,12 +29,51 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const { user, isLoading: authLoading } = useAuth();
   const [cart, setCart] = useState<CartLine[]>([]);
   const [hydrated, setHydrated] = useState(false);
+  const cartRef = useRef<CartLine[]>([]);
+  const mutationQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const latestMutation = useRef(0);
+
+  function updateCart(next: CartLine[] | ((cart: CartLine[]) => CartLine[])) {
+    const value = typeof next === "function" ? next(cartRef.current) : next;
+    cartRef.current = value;
+    setCart(value);
+  }
+
+  function mutateCart(
+    optimisticUpdate: (cart: CartLine[]) => CartLine[],
+    request: () => Promise<CartLine[]>,
+    errorMessage: string,
+  ) {
+    const previousCart = cartRef.current;
+    const mutationId = ++latestMutation.current;
+    updateCart(optimisticUpdate);
+
+    const mutation = mutationQueue.current.then(async () => {
+      try {
+        const confirmedCart = await request();
+        if (mutationId === latestMutation.current) updateCart(confirmedCart);
+        return true;
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : errorMessage);
+        if (mutationId === latestMutation.current) {
+          try {
+            updateCart(await requestCart());
+          } catch {
+            updateCart(previousCart);
+          }
+        }
+        return false;
+      }
+    });
+    mutationQueue.current = mutation;
+    return mutation;
+  }
 
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
       Promise.resolve().then(() => {
-        setCart([]);
+        updateCart([]);
         setHydrated(true);
       });
       return;
@@ -42,7 +81,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     let active = true;
     requestCart()
       .then((items) => {
-        if (active) setCart(items);
+        if (active) updateCart(items);
       })
       .catch(() => toast.error("We couldn't load your cart from the store."))
       .finally(() => {
@@ -53,62 +92,66 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     };
   }, [authLoading, user]);
 
-  const value = useMemo<StoreContextValue>(
-    () => ({
-      cart,
-      hydrated,
-      itemCount: cart.reduce((sum, line) => sum + line.quantity, 0),
-      subtotal: cart.reduce(
-        (sum, line) => sum + line.product.price * line.quantity,
-        0,
-      ),
-      async addToCart(product, quantity = 1) {
-        if (!product.inStock) return;
-        try {
-          setCart(
-            await requestCart("/store/cart/items", {
-              method: "POST",
-              body: JSON.stringify({ productId: product.id, quantity }),
-            }),
-          );
-          toast.success(`${product.name} added to cart`);
-        } catch (error) {
-          toast.error(
-            error instanceof Error ? error.message : "Could not add item",
-          );
-        }
-      },
-      async updateQuantity(id, quantity) {
-        try {
-          setCart(
-            await requestCart(`/store/cart/items/${id}`, {
-              method: "PATCH",
-              body: JSON.stringify({ quantity: Math.max(1, quantity) }),
-            }),
-          );
-        } catch {
-          toast.error("Could not update quantity");
-        }
-      },
-      async removeFromCart(id) {
-        try {
-          setCart(
-            await requestCart(`/store/cart/items/${id}`, { method: "DELETE" }),
-          );
-        } catch {
-          toast.error("Could not remove item");
-        }
-      },
-      async clearCart() {
-        try {
-          setCart(await requestCart("/store/cart", { method: "DELETE" }));
-        } catch {
-          toast.error("Could not clear cart");
-        }
-      },
-    }),
-    [cart, hydrated],
-  );
+  const value: StoreContextValue = {
+    cart,
+    hydrated,
+    itemCount: cart.reduce((sum, line) => sum + line.quantity, 0),
+    subtotal: cart.reduce(
+      (sum, line) => sum + line.product.price * line.quantity,
+      0,
+    ),
+    async addToCart(product, quantity = 1) {
+      if (!product.inStock) return;
+      const added = await mutateCart(
+        (items) => {
+          const existing = items.find((line) => line.product.id === product.id);
+          return existing
+            ? items.map((line) =>
+                line.product.id === product.id
+                  ? { ...line, quantity: line.quantity + quantity }
+                  : line,
+              )
+            : [...items, { product, quantity }];
+        },
+        () =>
+          requestCart("/store/cart/items", {
+            method: "POST",
+            body: JSON.stringify({ productId: product.id, quantity }),
+          }),
+        "Could not add item",
+      );
+      if (added) toast.success(`${product.name} added to cart`);
+    },
+    async updateQuantity(id, quantity) {
+      const nextQuantity = Math.max(1, quantity);
+      await mutateCart(
+        (items) =>
+          items.map((line) =>
+            line.product.id === id ? { ...line, quantity: nextQuantity } : line,
+          ),
+        () =>
+          requestCart(`/store/cart/items/${id}`, {
+            method: "PATCH",
+            body: JSON.stringify({ quantity: nextQuantity }),
+          }),
+        "Could not update quantity",
+      );
+    },
+    async removeFromCart(id) {
+      await mutateCart(
+        (items) => items.filter((line) => line.product.id !== id),
+        () => requestCart(`/store/cart/items/${id}`, { method: "DELETE" }),
+        "Could not remove item",
+      );
+    },
+    async clearCart() {
+      await mutateCart(
+        () => [],
+        () => requestCart("/store/cart", { method: "DELETE" }),
+        "Could not clear cart",
+      );
+    },
+  };
 
   return (
     <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
