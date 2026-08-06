@@ -9,7 +9,6 @@ const child = spawn(process.execPath, ["dist/main.js"], {
     PORT: String(port),
     ACCESS_TOKEN_TTL_SECONDS: "1",
     REFRESH_TOKEN_TTL_SECONDS: "4",
-    REFRESH_TOKEN_GRACE_SECONDS: "1",
   },
   stdio: ["ignore", "pipe", "pipe"],
 });
@@ -168,7 +167,7 @@ try {
       (await request("/auth/refresh", { jar, method: "POST" })).status === 200,
       "first rotation failed",
     );
-    await new Promise((resolve) => setTimeout(resolve, 1100));
+    await new Promise((resolve) => setTimeout(resolve, 10_100));
     const replayJar = new Map([["refresh_token", stolenRefresh]]);
     assert(
       (await request("/auth/refresh", { jar: replayJar, method: "POST" }))

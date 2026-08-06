@@ -28,10 +28,6 @@ export function refreshTokenTtlSeconds(): number {
   );
 }
 
-export function refreshTokenGraceSeconds(): number {
-  return positiveSeconds(process.env.REFRESH_TOKEN_GRACE_SECONDS, 10);
-}
-
 type TokenPair = { accessToken: string; refreshToken: string };
 type StudentProfile = {
   _id: string;
@@ -309,10 +305,8 @@ export class AuthService {
   private async resolveUsedRefreshToken(
     record: RefreshToken,
   ): Promise<TokenPair> {
-    const graceMilliseconds = refreshTokenGraceSeconds() * 1000;
     const withinGrace =
-      record.usedAt !== null &&
-      Date.now() - record.usedAt.getTime() <= graceMilliseconds;
+      record.usedAt !== null && Date.now() - record.usedAt.getTime() <= 10_000;
 
     if (withinGrace && record.replacedByToken) {
       const [replacement, user] = await Promise.all([
