@@ -8,12 +8,9 @@ import {
   useMemo,
   useState,
 } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
-import {
-  BackendError,
-  backendResultFromResponse,
-} from "@/lib/backend";
+import { BackendError, backendResultFromResponse } from "@/lib/backend";
 import {
   backendFetch,
   backendFetchWithAutoRefresh,
@@ -45,6 +42,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [accessTokenExpiresAt, setAccessTokenExpiresAt] = useState<
     string | null
@@ -62,9 +60,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       setUser(null);
       setAccessTokenExpiresAt(null);
-      router.replace("/login");
+      router.replace(`/login?callbackUrl=${encodeURIComponent(pathname)}`);
     },
-    [router],
+    [pathname, router],
   );
 
   const refreshUser = useCallback(async () => {
@@ -118,10 +116,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   useEffect(() => {
+    if (pathname === "/login" || pathname === "/register") {
+      Promise.resolve().then(() => setIsLoading(false));
+      return;
+    }
     // The provider synchronizes its state with the protected backend session.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void refreshUser().finally(() => setIsLoading(false));
-  }, [refreshUser]);
+  }, [pathname, refreshUser]);
 
   const value = useMemo(
     () => ({

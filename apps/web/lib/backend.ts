@@ -1,3 +1,5 @@
+import { logger } from "@/lib/logger";
+
 export type BackendTransport = (
   path: string,
   init?: RequestInit,
@@ -32,8 +34,10 @@ export function createBackendTransport(
   const normalizedBaseUrl = baseUrl.replace(/\/$/, "");
 
   return async (path, init) => {
+    const method = init?.method ?? defaults.method ?? "GET";
+    const startedAt = performance.now();
     try {
-      return await fetch(
+      const response = await fetch(
         `${normalizedBaseUrl}${path.startsWith("/") ? path : `/${path}`}`,
         {
           ...defaults,
@@ -44,7 +48,23 @@ export function createBackendTransport(
           },
         },
       );
+      const details = {
+        method: method.toUpperCase(),
+        path,
+        status: response.status,
+        durationMs: Math.round(performance.now() - startedAt),
+      };
+      if (response.status >= 400)
+        logger.warn("API", "Request completed", details);
+      else logger.info("API", "Request completed", details);
+      return response;
     } catch (cause) {
+      logger.error("API", "Request failed", {
+        method: method.toUpperCase(),
+        path,
+        status: 503,
+        durationMs: Math.round(performance.now() - startedAt),
+      });
       throw new BackendError("Backend API is unavailable", {
         status: 503,
         code: "API_UNAVAILABLE",

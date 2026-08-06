@@ -6,6 +6,8 @@ import { AuthController } from "./auth/auth.controller";
 import { AuthService } from "./auth/auth.service";
 import { PrismaService } from "./prisma.service";
 import { StudentsController } from "./students/students.controller";
+import { StoreController } from "./store/store.controller";
+import { StoreService } from "./store/store.service";
 
 @Module({
   imports: [
@@ -14,7 +16,12 @@ import { StudentsController } from "./students/students.controller";
       envFilePath: [".env.local", ".env"],
     }),
   ],
-  controllers: [AppController, AuthController, StudentsController],
-  providers: [AppService, AuthService, PrismaService],
+  controllers: [
+    AppController,
+    AuthController,
+    StudentsController,
+    StoreController,
+  ],
+  providers: [AppService, AuthService, PrismaService, StoreService],
 })
 export class AppModule {}

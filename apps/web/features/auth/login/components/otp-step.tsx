@@ -51,7 +51,7 @@ export function OtpStep({
             type="button"
             onClick={handleResend}
             disabled={resendLoading}
-            className="font-medium text-primary underline-offset-4 hover:underline disabled:opacity-50"
+            className="font-bold text-orange-600 underline-offset-4 hover:underline disabled:opacity-50"
           >
             {resendLoading ? "Resending…" : "Resend OTP"}
           </button>
@@ -61,7 +61,7 @@ export function OtpStep({
       <div className="space-y-3">
         <Button
           type="submit"
-          className="h-11 w-full gap-2 font-semibold"
+          className="h-12 w-full gap-2 rounded-xl bg-orange-600 font-bold text-white hover:bg-orange-700"
           disabled={loading || otp.length !== OTP_LENGTH}
         >
           {loading ? (

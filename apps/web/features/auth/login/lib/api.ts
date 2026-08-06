@@ -18,9 +18,10 @@ export function sendOtp(mobileNumber: string) {
   return postJson<ApiErrorResponse>("/auth/send-otp", { mobileNumber });
 }
 
-export function verifyOtp(mobileNumber: string, otp: string) {
+export function verifyOtp(mobileNumber: string, otp: string, name?: string) {
   return postJson<VerifyOtpResponse>("/auth/verify-otp", {
     mobileNumber,
     otp,
+    ...(name ? { name } : {}),
   });
 }

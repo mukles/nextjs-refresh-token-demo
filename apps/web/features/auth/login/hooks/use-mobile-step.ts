@@ -2,6 +2,10 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
+import {
+  isValidBangladeshMobile,
+  normalizeBangladeshMobile,
+} from "@/lib/mobile-number";
 import { sendOtp } from "../lib/api";
 
 export function useMobileStep(onSuccess: (mobile: string) => void) {
@@ -10,16 +14,21 @@ export function useMobileStep(onSuccess: (mobile: string) => void) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!mobile.trim()) return;
+    const normalizedMobile = normalizeBangladeshMobile(mobile);
+    if (!isValidBangladeshMobile(normalizedMobile)) {
+      toast.error("Enter a valid Bangladesh mobile number.");
+      return;
+    }
     setLoading(true);
     try {
-      const { ok, data } = await sendOtp(mobile);
+      const { ok, data } = await sendOtp(normalizedMobile);
       if (!ok) {
         toast.error(data.message ?? data.error ?? "Failed to send OTP");
         return;
       }
       toast.success("OTP sent to your number!");
-      onSuccess(mobile);
+      setMobile(normalizedMobile);
+      onSuccess(normalizedMobile);
     } catch {
       toast.error("Something went wrong. Please try again.");
     } finally {

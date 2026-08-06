@@ -24,10 +24,11 @@ export function MobileStep({
           <Input
             id="mobile"
             type="tel"
-            placeholder="01XXXXXXXXX"
+            inputMode="tel"
+            placeholder="01XXXXXXXXX or +8801XXXXXXXXX"
             value={mobile}
             onChange={(e) => setMobile(e.target.value)}
-            className="h-11 pl-10"
+            className="h-12 rounded-xl border-stone-200 pl-10 focus-visible:border-orange-500 focus-visible:ring-orange-100"
             autoComplete="tel"
             required
           />
@@ -39,7 +40,7 @@ export function MobileStep({
 
       <Button
         type="submit"
-        className="h-11 w-full gap-2 font-semibold"
+        className="h-12 w-full gap-2 rounded-xl bg-orange-600 font-bold text-white hover:bg-orange-700"
         disabled={loading || !mobile.trim()}
       >
         {loading ? (

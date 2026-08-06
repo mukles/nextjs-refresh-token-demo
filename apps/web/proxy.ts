@@ -17,6 +17,33 @@ function readResponseCookie(response: Response, name: string) {
   return undefined;
 }
 
+function isAuthRoute(request: NextRequest) {
+  return (
+    request.nextUrl.pathname === "/login" ||
+    request.nextUrl.pathname === "/register"
+  );
+}
+
+function safeCallbackUrl(request: NextRequest) {
+  const callbackUrl = request.nextUrl.searchParams.get("callbackUrl");
+  if (
+    !callbackUrl?.startsWith("/") ||
+    callbackUrl.startsWith("//") ||
+    callbackUrl.includes("\\") ||
+    callbackUrl.startsWith("/login") ||
+    callbackUrl.startsWith("/register")
+  ) {
+    return "/";
+  }
+  return callbackUrl;
+}
+
+function authenticatedResponse(request: NextRequest) {
+  return isAuthRoute(request)
+    ? NextResponse.redirect(new URL(safeCallbackUrl(request), request.url))
+    : NextResponse.next({ request: { headers: request.headers } });
+}
+
 export async function proxy(request: NextRequest) {
   const claims = decodeAccessToken(request.cookies.get(ACCESS_COOKIE)?.value);
 
@@ -26,10 +53,10 @@ export async function proxy(request: NextRequest) {
     : true;
 
   if (claims && !isExpired) {
-    return NextResponse.next();
+    return authenticatedResponse(request);
   }
 
-  if (isExpired) {
+  if (isExpired && request.cookies.has(REFRESH_COOKIE)) {
     const apiBaseUrl = process.env.API_BASE_URL;
     if (apiBaseUrl) {
       const refreshRes = await fetch(`${apiBaseUrl}/auth/refresh`, {
@@ -43,9 +70,7 @@ export async function proxy(request: NextRequest) {
         // Make the rotated tokens visible to this request's Server Components.
         request.cookies.set(ACCESS_COOKIE, accessToken);
         request.cookies.set(REFRESH_COOKIE, refreshToken);
-        const response = NextResponse.next({
-          request: { headers: request.headers },
-        });
+        const response = authenticatedResponse(request);
         // Persist the same rotated pair in the browser.
         response.cookies.set(ACCESS_COOKIE, accessToken, COOKIE_OPTS);
         response.cookies.set(REFRESH_COOKIE, refreshToken, COOKIE_OPTS);
@@ -54,13 +79,31 @@ export async function proxy(request: NextRequest) {
     }
   }
 
+  if (isAuthRoute(request)) {
+    const response = NextResponse.next();
+    clearAuthCookies(response);
+    return response;
+  }
+
   const loginUrl = new URL("/login", request.url);
-  loginUrl.searchParams.set("from", request.nextUrl.pathname);
+  loginUrl.searchParams.set(
+    "callbackUrl",
+    `${request.nextUrl.pathname}${request.nextUrl.search}`,
+  );
   const res = NextResponse.redirect(loginUrl);
   clearAuthCookies(res);
   return res;
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*"],
+  matcher: [
+    "/",
+    "/products/:path*",
+    "/categories/:path*",
+    "/cart",
+    "/checkout",
+    "/dashboard/:path*",
+    "/login",
+    "/register",
+  ],
 };

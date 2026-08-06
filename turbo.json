@@ -13,6 +13,9 @@
       "dependsOn": ["transit"],
       "outputs": []
     },
+    "format": {
+      "cache": false
+    },
     "typecheck": {
       "dependsOn": ["transit"],
       "outputs": []

@@ -122,7 +122,10 @@ try {
       body: JSON.stringify({ name: "Updated Student" }),
     });
     assert(update.status === 200, `expected 200, got ${update.status}`);
-    assert((await update.json()).name === "Updated Student", "name was not updated");
+    assert(
+      (await update.json()).name === "Updated Student",
+      "name was not updated",
+    );
 
     const profile = await request("/students/profile", { jar });
     assert(

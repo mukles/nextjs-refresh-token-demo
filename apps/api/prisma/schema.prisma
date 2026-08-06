@@ -15,6 +15,8 @@ model User {
   sessionId     String?
   passwordHash  String
   refreshTokens RefreshToken[]
+  carts         Cart[]
+  orders        Order[]
   createdAt     DateTime       @default(now())
 }
 
@@ -32,4 +34,82 @@ model RefreshToken {
   user   User   @relation(fields: [userId], references: [id])
 
   @@index([familyId])
+}
+
+model Product {
+  id          String        @id @default(auto()) @map("_id") @db.ObjectId
+  sku         String        @unique
+  name        String
+  image       String
+  price       Int
+  originalPrice Int?
+  promoLabel    String?
+  featured      Boolean       @default(false)
+  category    String
+  rating      Float
+  description String
+  inStock     Boolean       @default(true)
+  comments    ProductComment[]
+  cartItems   CartItem[]
+  orderItems  OrderItem[]
+  createdAt   DateTime      @default(now())
+}
+
+model ProductComment {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  rating    Int
+  comment   String
+  createdAt DateTime @default(now())
+  productId String   @db.ObjectId
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, createdAt])
+}
+
+model Cart {
+  id        String     @id @default(auto()) @map("_id") @db.ObjectId
+  items     CartItem[]
+  userId    String?    @db.ObjectId
+  user      User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([userId])
+}
+
+model CartItem {
+  id        String  @id @default(auto()) @map("_id") @db.ObjectId
+  quantity  Int
+  cartId    String  @db.ObjectId
+  cart      Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId String  @db.ObjectId
+  product   Product @relation(fields: [productId], references: [id])
+
+  @@unique([cartId, productId])
+}
+
+model Order {
+  id              String      @id @default(auto()) @map("_id") @db.ObjectId
+  orderNumber     String      @unique
+  customerName    String
+  mobileNumber    String
+  deliveryAddress String
+  paymentMethod   String
+  total           Int
+  items           OrderItem[]
+  userId          String      @db.ObjectId
+  user            User        @relation(fields: [userId], references: [id])
+  createdAt       DateTime    @default(now())
+}
+
+model OrderItem {
+  id        String  @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  unitPrice Int
+  quantity  Int
+  orderId   String  @db.ObjectId
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String  @db.ObjectId
+  product   Product @relation(fields: [productId], references: [id])
 }

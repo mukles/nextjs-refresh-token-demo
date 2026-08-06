@@ -20,11 +20,17 @@ export function SiteHeader() {
   return (
     <header className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
       <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center gap-4 px-6 py-3">
-        <Link className="mr-auto font-semibold tracking-tight" href="/dashboard">
+        <Link
+          className="mr-auto font-semibold tracking-tight"
+          href="/dashboard"
+        >
           Next.js Auth Lab
         </Link>
 
-        <nav aria-label="Rendering examples" className="flex items-center gap-1">
+        <nav
+          aria-label="Rendering examples"
+          className="flex items-center gap-1"
+        >
           {renderLinks.map((link) => {
             const isActive = pathname === link.href;
             return (
@@ -46,7 +52,9 @@ export function SiteHeader() {
         </nav>
 
         <div className="hidden text-right text-xs sm:block">
-          <p className="font-medium">{isLoading ? "Checking session…" : user?.name}</p>
+          <p className="font-medium">
+            {isLoading ? "Checking session…" : user?.name}
+          </p>
           {user && <p className="text-muted-foreground">{user.mobile}</p>}
         </div>
 
@@ -58,13 +66,13 @@ export function SiteHeader() {
           disabled={isLoading || isRefreshing}
           onClick={() => void rotateTokens()}
         >
-          {isRefreshing ? (
-            <Loader2 className="animate-spin" />
-          ) : (
-            <RefreshCw />
-          )}
+          {isRefreshing ? <Loader2 className="animate-spin" /> : <RefreshCw />}
         </Button>
-        <Button variant="outline" onClick={() => void logout()} disabled={isLoading}>
+        <Button
+          variant="outline"
+          onClick={() => void logout()}
+          disabled={isLoading}
+        >
           <LogOut />
           <span className="hidden sm:inline">Logout</span>
         </Button>
