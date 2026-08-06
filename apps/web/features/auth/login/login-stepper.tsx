@@ -1,6 +1,6 @@
 "use client";
 
-import { ShieldCheck } from "lucide-react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { MobileStep } from "./components/mobile-step";
@@ -11,7 +11,7 @@ import type { Step } from "./types";
 
 export function LoginStepper() {
   const params = useSearchParams();
-  const requestedRedirect = params.get("from");
+  const requestedRedirect = params.get("callbackUrl") ?? params.get("from");
   const redirectTo =
     requestedRedirect?.startsWith("/") &&
     !requestedRedirect.startsWith("//") &&
@@ -27,16 +27,13 @@ export function LoginStepper() {
   }
 
   return (
-    <div className="w-full max-w-sm">
-      <div className="space-y-2 rounded-2xl border bg-card p-8 shadow-lg">
-        <div className="mb-6 text-center">
-          <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10">
-            <ShieldCheck className="h-6 w-6 text-primary" />
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight">
+    <div className="w-full max-w-md">
+      <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm sm:p-6">
+        <div className="mb-6">
+          <h2 className="text-xl font-black tracking-tight text-stone-900">
             {step === 0 ? "Sign in" : "Enter OTP"}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          </h2>
+          <p className="mt-1 text-sm text-stone-500">
             {step === 0
               ? "Enter your mobile number to get started."
               : "Check your phone for the 6-digit code."}
@@ -55,6 +52,15 @@ export function LoginStepper() {
           />
         )}
       </div>
+      <p className="mt-5 text-center text-sm text-stone-500">
+        New to ShobShop?{" "}
+        <Link
+          href={`/register?callbackUrl=${encodeURIComponent(redirectTo)}`}
+          className="font-bold text-orange-600 hover:underline"
+        >
+          Create an account
+        </Link>
+      </p>
     </div>
   );
 }

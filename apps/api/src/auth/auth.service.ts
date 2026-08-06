@@ -1,4 +1,9 @@
-import { Injectable, UnauthorizedException } from "@nestjs/common";
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  UnauthorizedException,
+} from "@nestjs/common";
 import type { RefreshToken, User } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { decodeJwt, jwtVerify, SignJWT } from "jose";
@@ -37,6 +42,8 @@ type StudentProfile = {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   sendOtp(mobileNumber: string) {
@@ -46,23 +53,40 @@ export class AuthService {
     };
   }
 
-  async verifyOtp(mobileNumber: string, otp: string) {
+  async verifyOtp(mobileNumber: string, otp: string, requestedName?: string) {
     if (otp !== "123456") {
       throw new UnauthorizedException("Invalid OTP");
     }
 
     const email = `student-${mobileNumber}@demo.local`;
+    const name = requestedName?.trim();
+    if (
+      requestedName !== undefined &&
+      (!name || name.length < 2 || name.length > 80)
+    ) {
+      throw new BadRequestException("Name must be between 2 and 80 characters");
+    }
     const existing = await this.prisma.user.findUnique({ where: { email } });
+    if (!existing && !name) {
+      throw new UnauthorizedException(
+        "Account not found. Please create an account first.",
+      );
+    }
+    if (existing && name) {
+      throw new BadRequestException(
+        "An account already exists for this number. Please sign in.",
+      );
+    }
     const user = existing
       ? await this.prisma.user.update({
           where: { id: existing.id },
-          data: { mobileNumber },
+          data: { mobileNumber, ...(name ? { name } : {}) },
         })
       : await this.prisma.user.create({
           data: {
             email,
             mobileNumber,
-            name: `Student ${mobileNumber.slice(-4)}`,
+            name: name ?? `Customer ${mobileNumber.slice(-4)}`,
             passwordHash: await bcrypt.hash(crypto.randomUUID(), 10),
           },
         });
@@ -161,8 +185,18 @@ export class AuthService {
     };
   }
 
+  async updateProfile(accessToken: string, input: { name: string }) {
+    const profile = await this.getProfile(accessToken);
+    await this.prisma.user.update({
+      where: { id: profile._id },
+      data: { name: input.name },
+    });
+    return this.getProfile(accessToken);
+  }
+
   private async signAccessToken(user: User, sessionId: string) {
-    return new SignJWT({
+    const expiresInSeconds = accessTokenTtlSeconds();
+    const token = await new SignJWT({
       email: user.email,
       name: user.name,
       mobile: user.mobileNumber,
@@ -171,8 +205,10 @@ export class AuthService {
       .setProtectedHeader({ alg: "HS256" })
       .setSubject(user.id)
       .setIssuedAt()
-      .setExpirationTime(`${accessTokenTtlSeconds()}s`)
+      .setExpirationTime(`${expiresInSeconds}s`)
       .sign(this.jwtSecret());
+    this.logger.log(`Access token issued; expiresIn=${expiresInSeconds}s`);
+    return token;
   }
 
   private jwtSecret() {

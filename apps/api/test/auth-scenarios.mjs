@@ -112,6 +112,36 @@ try {
     );
   });
 
+  await scenario("updates the authenticated student profile", async () => {
+    const jar = new Map();
+    await login(jar, "01641146790");
+    const update = await request("/students/profile", {
+      jar,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Updated Student" }),
+    });
+    assert(update.status === 200, `expected 200, got ${update.status}`);
+    assert(
+      (await update.json()).name === "Updated Student",
+      "name was not updated",
+    );
+
+    const profile = await request("/students/profile", { jar });
+    assert(
+      (await profile.json()).name === "Updated Student",
+      "updated name was not persisted",
+    );
+
+    const invalid = await request("/students/profile", {
+      jar,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: " " }),
+    });
+    assert(invalid.status === 400, `expected 400, got ${invalid.status}`);
+  });
+
   await scenario("refreshes after access-token expiry", async () => {
     const jar = new Map();
     await login(jar);

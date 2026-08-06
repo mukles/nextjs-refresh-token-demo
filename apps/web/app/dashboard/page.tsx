@@ -1,5 +1,5 @@
-import { DashboardClient } from "./_components/dashobard-client-page";
+import { DashboardOverview } from "./_components/dashboard-overview";
 
 export default function DashboardPage() {
-  return <DashboardClient />;
+  return <DashboardOverview />;
 }

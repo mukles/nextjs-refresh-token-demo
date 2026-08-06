@@ -1,20 +1,27 @@
-export type StudentProfile = {
-  _id: string;
-  name: string;
-  mobileNumber: string;
-  mobileVerified: boolean;
-  image: string | null;
-  profileCompleted: boolean;
-  isActive: boolean;
-  gender: string;
-  address: { district?: string };
-  institution: { _id: string; institutionShortName: string } | null;
-  activeClass: { _id: string; name: string } | null;
-  class: { class: string; className: string }[];
-  trial: {
-    status: string;
-    startedAt: string;
-    expiresAt: string;
-    expiredAt: string;
-  } | null;
-};
+import { backendFetch, type BackendTransport } from "@/lib/backend";
+import type { StudentProfile } from "@/types/student-profile";
+
+export async function fetchStudentProfile(transport: BackendTransport) {
+  return backendFetch<StudentProfile>(
+    transport,
+    "/students/profile",
+    undefined,
+    "Could not load profile",
+  );
+}
+
+export async function updateStudentProfile(
+  transport: BackendTransport,
+  input: { name: string },
+) {
+  return backendFetch<StudentProfile>(
+    transport,
+    "/students/profile",
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    },
+    "Could not update profile",
+  );
+}

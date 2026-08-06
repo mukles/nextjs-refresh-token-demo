@@ -1,7 +1,9 @@
+import { Logger } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import cookieParser from "cookie-parser";
 import { config } from "dotenv";
+import type { NextFunction, Request, Response } from "express";
 import { AppModule } from "./app.module";
 import { ACCESS_COOKIE, REFRESH_COOKIE } from "./auth/auth.service";
 
@@ -15,6 +17,20 @@ if (localEnv?.JWT_SECRET) process.env.JWT_SECRET = localEnv.JWT_SECRET;
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  const httpLogger = new Logger("HTTP");
+
+  app.use((request: Request, response: Response, next: NextFunction) => {
+    const startedAt = performance.now();
+    response.once("finish", () => {
+      const durationMs = Math.round(performance.now() - startedAt);
+      const message = `${request.method} ${request.originalUrl} ${response.statusCode} ${durationMs}ms`;
+
+      if (response.statusCode >= 500) httpLogger.error(message);
+      else if (response.statusCode >= 400) httpLogger.warn(message);
+      else httpLogger.log(message);
+    });
+    next();
+  });
   app.use(cookieParser());
   app.enableCors({
     origin: process.env.WEB_ORIGIN ?? "http://localhost:3000",

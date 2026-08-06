@@ -18,6 +18,10 @@ import {
 } from "@nestjs/swagger";
 import type { Request, Response } from "express";
 import {
+  isValidBangladeshMobile,
+  normalizeBangladeshMobile,
+} from "../common/mobile-number";
+import {
   ACCESS_COOKIE,
   accessTokenTtlSeconds,
   AuthService,
@@ -26,7 +30,7 @@ import {
 } from "./auth.service";
 
 type Credentials = { email?: string; password?: string };
-type OtpRequest = { mobileNumber?: string; otp?: string };
+type OtpRequest = { mobileNumber?: string; otp?: string; name?: string };
 
 function readCookie(request: Request, name: string): string | undefined {
   const cookie = request.headers.cookie
@@ -64,7 +68,11 @@ export class AuthController {
     if (!body.mobileNumber) {
       throw new BadRequestException("mobileNumber is required");
     }
-    return this.authService.sendOtp(body.mobileNumber);
+    const mobileNumber = normalizeBangladeshMobile(body.mobileNumber);
+    if (!isValidBangladeshMobile(mobileNumber)) {
+      throw new BadRequestException("Enter a valid Bangladesh mobile number");
+    }
+    return this.authService.sendOtp(mobileNumber);
   }
 
   @Post("verify-otp")
@@ -77,9 +85,14 @@ export class AuthController {
     if (!body.mobileNumber || !body.otp) {
       throw new BadRequestException("mobileNumber and otp are required");
     }
+    const mobileNumber = normalizeBangladeshMobile(body.mobileNumber);
+    if (!isValidBangladeshMobile(mobileNumber)) {
+      throw new BadRequestException("Enter a valid Bangladesh mobile number");
+    }
     const result = await this.authService.verifyOtp(
-      body.mobileNumber,
+      mobileNumber,
       body.otp,
+      body.name,
     );
     this.setAuthCookies(response, result.tokens);
     return { success: true, message: result.body.message };
