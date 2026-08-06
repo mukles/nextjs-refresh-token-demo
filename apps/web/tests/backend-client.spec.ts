@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { backendFetch } from "../lib/backend";
 import { backendFetchWithAutoRefresh } from "../lib/backend-client";
 
 test("simultaneous 401 responses share one refresh request", async () => {
@@ -44,4 +45,35 @@ test("network failures become a stable API_UNAVAILABLE response", async () => {
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("common requests return the same typed result schema", async () => {
+  const success = await backendFetch<{ value: number }>(
+    async () => Response.json({ value: 42 }),
+    "/example",
+  );
+  expect(success).toEqual({
+    ok: true,
+    status: 200,
+    data: { value: 42 },
+    error: null,
+  });
+
+  const failure = await backendFetch(
+    async () =>
+      Response.json(
+        { message: "Not allowed", code: "FORBIDDEN" },
+        { status: 403 },
+      ),
+    "/example",
+  );
+  expect(failure.ok).toBe(false);
+  if (failure.ok) return;
+  expect(failure.status).toBe(403);
+  expect(failure.data).toBeNull();
+  expect(failure.error).toMatchObject({
+    message: "Not allowed",
+    code: "FORBIDDEN",
+    status: 403,
+  });
 });

@@ -161,6 +161,15 @@ export class AuthService {
     };
   }
 
+  async updateProfile(accessToken: string, input: { name: string }) {
+    const profile = await this.getProfile(accessToken);
+    await this.prisma.user.update({
+      where: { id: profile._id },
+      data: { name: input.name },
+    });
+    return this.getProfile(accessToken);
+  }
+
   private async signAccessToken(user: User, sessionId: string) {
     return new SignJWT({
       email: user.email,

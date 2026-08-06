@@ -105,6 +105,22 @@ test("an expired access token silently refreshes and retries once", async ({
   expect(refreshCalls).toBe(1);
 });
 
+test("updates profile settings and reflects the new name", async ({ page }) => {
+  await signIn(page, "01641146787");
+  await page.getByRole("link", { name: "Profile settings" }).click();
+  await expect(page).toHaveURL(/\/dashboard\/settings$/);
+  await page.getByLabel("Display name").fill("Updated Student");
+  await page.getByRole("button", { name: "Save profile" }).click();
+  await expect(page.getByText("Profile updated")).toBeVisible();
+  await expect(page.getByText("Updated Student")).toBeVisible();
+});
+
+test("loads protected auth checks while scrolling", async ({ page }) => {
+  await signIn(page, "01641146788");
+  await page.getByText("Infinite auth checks").scrollIntoViewIfNeeded();
+  await expect(page.getByText("Auth check #1")).toBeVisible();
+});
+
 test("Proxy refreshes an expired token before protected SSR", async ({
   page,
   context,
@@ -121,7 +137,7 @@ test("Proxy refreshes an expired token before protected SSR", async ({
   await expect(
     page.getByRole("heading", { name: "Server-rendered profile" }),
   ).toBeVisible();
-  await expect(page.getByText("Student 6786")).toBeVisible();
+  await expect(page.getByRole("main").getByText("Student 6786")).toBeVisible();
 
   const after = (await context.cookies()).find(
     (cookie) => cookie.name === ACCESS_COOKIE,
