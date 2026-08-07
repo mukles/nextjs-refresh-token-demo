@@ -6,10 +6,21 @@ import {
   REFRESH_COOKIE,
   COOKIE_OPTS,
 } from "./lib/auth/constants";
+import { API_BASE_URL } from "./lib/auth/server/constants";
 
 function isAuthRoute(request: NextRequest) {
   const publicRoutes = ["/login", "/register"];
   return publicRoutes.some((path) => request.nextUrl.pathname === path);
+}
+
+function readResponseCookie(response: Response, name: string) {
+  for (const header of response.headers.getSetCookie()) {
+    const pair = header.split(";", 1)[0];
+    const separator = pair.indexOf("=");
+    if (separator === -1 || pair.slice(0, separator) !== name) continue;
+    return decodeURIComponent(pair.slice(separator + 1));
+  }
+  return undefined;
 }
 
 export async function proxy(request: NextRequest) {
@@ -30,27 +41,24 @@ export async function proxy(request: NextRequest) {
   }
 
   if (isExpired && request.cookies.has(REFRESH_COOKIE)) {
-    const apiBaseUrl = process.env.API_BASE_URL;
-    if (apiBaseUrl) {
-      const refreshRes = await fetch(`${apiBaseUrl}/auth/refresh`, {
-        method: "POST",
-        headers: { cookie: request.headers.get("cookie") ?? "" },
-      });
-      const accessToken = request.cookies.get(ACCESS_COOKIE)?.value;
-      const refreshToken = request.cookies.get(REFRESH_COOKIE)?.value;
+    const refreshRes = await fetch(`${API_BASE_URL}/auth/refresh`, {
+      method: "POST",
+      headers: { cookie: request.headers.get("cookie") ?? "" },
+    });
+    const accessToken = readResponseCookie(refreshRes, ACCESS_COOKIE);
+    const refreshToken = readResponseCookie(refreshRes, REFRESH_COOKIE);
 
-      if (refreshRes.ok && accessToken && refreshToken) {
-        // Make the rotated tokens visible to this request's Server Components.
-        request.cookies.set(ACCESS_COOKIE, accessToken);
-        request.cookies.set(REFRESH_COOKIE, refreshToken);
-        const response = NextResponse.next({
-          headers: request.headers,
-        });
-        // Persist the same rotated pair in the browser.
-        response.cookies.set(ACCESS_COOKIE, accessToken, COOKIE_OPTS);
-        response.cookies.set(REFRESH_COOKIE, refreshToken, COOKIE_OPTS);
-        return response;
-      }
+    if (refreshRes.ok && accessToken && refreshToken) {
+      // Make the rotated tokens visible to this request's Server Components.
+      request.cookies.set(ACCESS_COOKIE, accessToken);
+      request.cookies.set(REFRESH_COOKIE, refreshToken);
+      const response = NextResponse.next({
+        headers: request.headers,
+      });
+      // Persist the same rotated pair in the browser.
+      response.cookies.set(ACCESS_COOKIE, accessToken, COOKIE_OPTS);
+      response.cookies.set(REFRESH_COOKIE, refreshToken, COOKIE_OPTS);
+      return response;
     }
   }
 
