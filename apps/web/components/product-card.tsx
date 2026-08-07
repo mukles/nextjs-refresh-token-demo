@@ -71,7 +71,7 @@ export function ProductCard({
         <div className="mt-4 grid grid-cols-2 gap-2">
           <Link
             href={`/products/${product.id}`}
-            className="inline-flex h-10 items-center justify-center gap-1 rounded-lg border border-stone-200 text-sm font-semibold hover:bg-stone-50"
+            className="inline-flex h-10 items-center justify-center gap-1 rounded-lg border border-stone-200 text-sm font-semibold text-stone-900 hover:bg-stone-50"
           >
             View Details <ArrowUpRight className="size-4" />
           </Link>
