@@ -1,10 +1,12 @@
 import "server-only";
 
+import { connection } from "next/server";
 import { backendFetch } from "@/lib/backend";
 import { createServerBackendTransport } from "@/lib/backend-server";
 import type { DetailedProduct, Product } from "@/lib/store-types";
 
 export async function getStoreProducts() {
+  await connection();
   const transport = await createServerBackendTransport();
   const result = await backendFetch<Product[]>(
     transport,
@@ -18,6 +20,7 @@ export async function getStoreProducts() {
 }
 
 async function getProductsFromPath(path: string, fallback: string) {
+  await connection();
   const transport = await createServerBackendTransport();
   const result = await backendFetch<Product[]>(
     transport,
@@ -44,6 +47,7 @@ export function getCategoryProducts(category: string) {
 }
 
 export async function getStoreProduct(id: string) {
+  await connection();
   const transport = await createServerBackendTransport();
   const result = await backendFetch<DetailedProduct>(
     transport,
