@@ -21,9 +21,12 @@ export async function proxy(request: NextRequest) {
     : true;
 
   if (claims && !isExpired) {
-    const callbackUrl = request.nextUrl.searchParams.get("callbackUrl") || "/";
-    const target = isAuthRoute(request) ? "/" : callbackUrl;
-    return NextResponse.redirect(new URL(target, request.url));
+    if (isAuthRoute(request)) {
+      const callbackUrl =
+        request.nextUrl.searchParams.get("callbackUrl") || "/";
+      return NextResponse.redirect(new URL(callbackUrl, request.url));
+    }
+    return NextResponse.next();
   }
 
   if (isExpired && request.cookies.has(REFRESH_COOKIE)) {
