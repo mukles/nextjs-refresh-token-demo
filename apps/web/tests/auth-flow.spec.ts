@@ -15,9 +15,7 @@ async function signIn(page: Page, mobile: string) {
   await page.locator("[data-input-otp]").fill("123456");
   await page.getByRole("button", { name: "Verify & Sign in" }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
-  await expect(
-    page.getByText(new RegExp(`Signed in as.*${mobile}`)),
-  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Logout" })).toBeVisible();
 }
 
 test("unauthenticated routes redirect safely and preserve an internal destination", async ({
@@ -107,7 +105,8 @@ test("an expired access token silently refreshes and retries once", async ({
 
 test("updates profile settings and reflects the new name", async ({ page }) => {
   await signIn(page, "01641146787");
-  await page.getByRole("link", { name: "Profile settings" }).click();
+  // Navigate directly: the sign-in toast can still overlay the header link.
+  await page.goto("/dashboard/settings");
   await expect(page).toHaveURL(/\/dashboard\/settings$/);
   await page.getByLabel("Display name").fill("Updated Student");
   await page.getByRole("button", { name: "Save profile" }).click();

@@ -1,2 +1,2 @@
 export const OTP_LENGTH = 6;
-export const DEFAULT_REDIRECT = "/";
+export { DEFAULT_REDIRECT } from "@/lib/auth/constants";

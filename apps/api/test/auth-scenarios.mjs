@@ -21,44 +21,68 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
-function cookieValue(jar, name) {
-  return jar.get(name);
-}
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function applyCookies(response, jar) {
-  const values = response.headers.getSetCookie?.() ?? [];
-  for (const header of values) {
-    const [pair, ...attributes] = header.split(";");
-    const separator = pair.indexOf("=");
-    const name = pair.slice(0, separator);
-    const value = pair.slice(separator + 1);
-    const expired = attributes.some((part) => /^\s*Max-Age=0\s*$/i.test(part));
-    if (expired || value === "") jar.delete(name);
-    else jar.set(name, value);
-  }
-}
-
-async function request(path, { jar = new Map(), headers, ...init } = {}) {
-  const cookie = [...jar].map(([key, value]) => `${key}=${value}`).join("; ");
-  const response = await fetch(`${baseUrl}${path}`, {
+/**
+ * The API sets no cookies: tokens travel in the JSON body and come back as
+ * `Authorization: Bearer <token>`. A "session" here is just the token pair.
+ */
+async function request(path, { token, json, ...init } = {}) {
+  return fetch(`${baseUrl}${path}`, {
     ...init,
     headers: {
-      ...(cookie ? { Cookie: cookie } : {}),
-      ...headers,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(json ? { "Content-Type": "application/json" } : {}),
+      ...init.headers,
     },
+    ...(json ? { body: JSON.stringify(json) } : {}),
   });
-  applyCookies(response, jar);
-  return response;
 }
 
-async function login(jar, mobile = "01641146789") {
-  return request("/auth/verify-otp", {
-    jar,
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ mobileNumber: mobile, otp: "123456" }),
-  });
+function readTokens(payload) {
+  return {
+    accessToken: payload.access_token,
+    refreshToken: payload.refresh_token,
+  };
 }
+
+let mobileCounter = 0;
+function uniqueMobile() {
+  mobileCounter += 1;
+  return `0171${String(Date.now() % 1_000_00).padStart(5, "0")}${String(
+    mobileCounter,
+  ).padStart(2, "0")}`.slice(0, 11);
+}
+
+/** Registers on first use and signs in afterwards, so runs are DB-independent. */
+async function login(mobile = uniqueMobile()) {
+  let response = await request("/auth/verify-otp", {
+    method: "POST",
+    json: { mobileNumber: mobile, otp: "123456", name: "Scenario Student" },
+  });
+  if (response.status === 400) {
+    response = await request("/auth/verify-otp", {
+      method: "POST",
+      json: { mobileNumber: mobile, otp: "123456" },
+    });
+  }
+  assert(response.status === 200, `login failed (${response.status})`);
+  const session = readTokens(await response.json());
+  session.mobile = mobile;
+  return session;
+}
+
+async function rotate(session) {
+  const response = await request("/auth/refresh", {
+    method: "POST",
+    json: { refresh_token: session.refreshToken },
+  });
+  if (response.ok) Object.assign(session, readTokens(await response.json()));
+  return response.status;
+}
+
+const profile = (session) =>
+  request("/students/profile", { token: session.accessToken });
 
 async function waitForServer() {
   for (let attempt = 0; attempt < 40; attempt += 1) {
@@ -66,7 +90,7 @@ async function waitForServer() {
       const response = await fetch(`${baseUrl}/health`);
       if (response.ok) return;
     } catch {}
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await sleep(100);
   }
   throw new Error(`API did not start:\n${serverOutput}`);
 }
@@ -81,44 +105,68 @@ async function scenario(name, run) {
 try {
   await waitForServer();
 
-  await scenario(
-    "rejects missing refresh token and clears cookies",
-    async () => {
-      const jar = new Map([["access_token", "stale"]]);
-      const response = await request("/auth/refresh", { jar, method: "POST" });
-      assert(response.status === 401, `expected 401, got ${response.status}`);
-      assert(jar.size === 0, "stale cookies were not cleared");
-    },
-  );
+  await scenario("rejects a refresh with no token presented", async () => {
+    const response = await request("/auth/refresh", { method: "POST" });
+    assert(response.status === 401, `expected 401, got ${response.status}`);
+  });
 
-  await scenario("rejects an invalid OTP", async () => {
-    const response = await request("/auth/verify-otp", {
+  await scenario("rejects an unknown refresh token", async () => {
+    const response = await request("/auth/refresh", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mobileNumber: "01641146789", otp: "000000" }),
+      json: { refresh_token: "not-a-real-token" },
     });
     assert(response.status === 401, `expected 401, got ${response.status}`);
   });
 
-  await scenario("issues an authenticated cookie session", async () => {
-    const jar = new Map();
-    assert((await login(jar)).status === 200, "login failed");
-    assert(cookieValue(jar, "access_token"), "access cookie missing");
-    assert(cookieValue(jar, "refresh_token"), "refresh cookie missing");
+  await scenario("rejects an invalid OTP", async () => {
+    const response = await request("/auth/verify-otp", {
+      method: "POST",
+      json: { mobileNumber: uniqueMobile(), otp: "000000" },
+    });
+    assert(response.status === 401, `expected 401, got ${response.status}`);
+  });
+
+  await scenario("rejects a request body that fails validation", async () => {
+    const missingOtp = await request("/auth/verify-otp", {
+      method: "POST",
+      json: { mobileNumber: uniqueMobile() },
+    });
     assert(
-      (await request("/students/profile", { jar })).status === 200,
-      "protected profile failed",
+      missingOtp.status === 400,
+      `expected 400 for a missing otp, got ${missingOtp.status}`,
+    );
+
+    const shortName = await request("/auth/verify-otp", {
+      method: "POST",
+      json: { mobileNumber: uniqueMobile(), otp: "123456", name: "x" },
+    });
+    assert(
+      shortName.status === 400,
+      `expected 400 for a 1-character name, got ${shortName.status}`,
     );
   });
 
+  await scenario("issues a bearer session", async () => {
+    const session = await login();
+    assert(session.accessToken, "access_token missing");
+    assert(session.refreshToken, "refresh_token missing");
+    assert(
+      (await profile(session)).status === 200,
+      "protected profile rejected a fresh access token",
+    );
+  });
+
+  await scenario("rejects a protected route with no token", async () => {
+    const response = await request("/students/profile");
+    assert(response.status === 401, `expected 401, got ${response.status}`);
+  });
+
   await scenario("updates the authenticated student profile", async () => {
-    const jar = new Map();
-    await login(jar, "01641146790");
+    const session = await login();
     const update = await request("/students/profile", {
-      jar,
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "Updated Student" }),
+      token: session.accessToken,
+      json: { name: "Updated Student" },
     });
     assert(update.status === 200, `expected 200, got ${update.status}`);
     assert(
@@ -126,142 +174,201 @@ try {
       "name was not updated",
     );
 
-    const profile = await request("/students/profile", { jar });
+    const persisted = await profile(session);
     assert(
-      (await profile.json()).name === "Updated Student",
+      (await persisted.json()).name === "Updated Student",
       "updated name was not persisted",
     );
 
     const invalid = await request("/students/profile", {
-      jar,
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: " " }),
+      token: session.accessToken,
+      json: { name: " " },
     });
     assert(invalid.status === 400, `expected 400, got ${invalid.status}`);
   });
 
   await scenario("refreshes after access-token expiry", async () => {
-    const jar = new Map();
-    await login(jar);
-    await new Promise((resolve) => setTimeout(resolve, 1200));
+    const session = await login();
+    await sleep(1200);
     assert(
-      (await request("/students/profile", { jar })).status === 401,
+      (await profile(session)).status === 401,
       "expired access token was accepted",
     );
+    assert((await rotate(session)) === 200, "valid refresh token was rejected");
     assert(
-      (await request("/auth/refresh", { jar, method: "POST" })).status === 200,
-      "valid refresh token was rejected",
-    );
-    assert(
-      (await request("/students/profile", { jar })).status === 200,
+      (await profile(session)).status === 200,
       "refreshed access token was rejected",
     );
   });
 
   await scenario("detects replay of a rotated refresh token", async () => {
-    const jar = new Map();
-    await login(jar);
-    const stolenRefresh = cookieValue(jar, "refresh_token");
+    const session = await login();
+    const stolenRefresh = session.refreshToken;
+    assert((await rotate(session)) === 200, "first rotation failed");
+
+    await sleep(10_100); // outlast the concurrent-refresh grace window
+    const replay = await request("/auth/refresh", {
+      method: "POST",
+      json: { refresh_token: stolenRefresh },
+    });
+    assert(replay.status === 401, "replayed refresh token was accepted");
     assert(
-      (await request("/auth/refresh", { jar, method: "POST" })).status === 200,
-      "first rotation failed",
+      (await replay.json()).code === "REUSE_DETECTED",
+      "replay was not reported as REUSE_DETECTED",
     );
-    await new Promise((resolve) => setTimeout(resolve, 10_100));
-    const replayJar = new Map([["refresh_token", stolenRefresh]]);
     assert(
-      (await request("/auth/refresh", { jar: replayJar, method: "POST" }))
-        .status === 401,
-      "replayed refresh token was accepted",
-    );
-    assert(
-      (await request("/students/profile", { jar })).status === 401,
+      (await rotate(session)) === 401,
       "replay did not revoke the token family",
     );
   });
 
   await scenario("allows only the newest device session", async () => {
-    const deviceA = new Map();
-    const deviceB = new Map();
-    await login(deviceA);
-    await login(deviceB);
+    const deviceA = await login();
+    const deviceB = await login(deviceA.mobile);
+    const replaced = await profile(deviceA);
+    assert(replaced.status === 401, "older device remained active");
     assert(
-      (await request("/students/profile", { jar: deviceA })).status === 401,
-      "older device remained active",
+      (await replaced.json()).code === "SESSION_REPLACED",
+      "older device was not told its session was replaced",
     );
-    assert(
-      (await request("/students/profile", { jar: deviceB })).status === 200,
-      "newest device was rejected",
-    );
+    assert((await profile(deviceB)).status === 200, "newest device rejected");
   });
 
   await scenario("makes concurrent refresh requests idempotent", async () => {
-    const jar = new Map();
-    await login(jar);
-    const cookie = `refresh_token=${cookieValue(jar, "refresh_token")}`;
+    const session = await login();
     const [first, second] = await Promise.all([
-      fetch(`${baseUrl}/auth/refresh`, {
+      request("/auth/refresh", {
         method: "POST",
-        headers: { Cookie: cookie },
+        json: { refresh_token: session.refreshToken },
       }),
-      fetch(`${baseUrl}/auth/refresh`, {
+      request("/auth/refresh", {
         method: "POST",
-        headers: { Cookie: cookie },
+        json: { refresh_token: session.refreshToken },
       }),
     ]);
     assert(
       first.status === 200 && second.status === 200,
       `expected 200/200, got ${first.status}/${second.status}`,
     );
-    const firstJar = new Map();
-    const secondJar = new Map();
-    applyCookies(first, firstJar);
-    applyCookies(second, secondJar);
+    const firstTokens = readTokens(await first.json());
+    const secondTokens = readTokens(await second.json());
     assert(
-      cookieValue(firstJar, "refresh_token") ===
-        cookieValue(secondJar, "refresh_token"),
+      firstTokens.refreshToken === secondTokens.refreshToken,
       "concurrent requests did not receive the same replacement token",
     );
-    jar.set("access_token", cookieValue(firstJar, "access_token"));
-    jar.set("refresh_token", cookieValue(firstJar, "refresh_token"));
     assert(
-      (await request("/students/profile", { jar })).status === 200,
+      (await profile(firstTokens)).status === 200,
       "concurrent refresh revoked the valid session",
     );
   });
 
+  await scenario("logout invalidates both tokens", async () => {
+    const session = await login();
+    const logout = await request("/auth/logout", {
+      method: "POST",
+      json: { refresh_token: session.refreshToken },
+    });
+    assert(logout.status === 200, "logout failed");
+    assert(
+      (await profile(session)).status === 401,
+      "old access token survived logout",
+    );
+    assert(
+      (await rotate(session)) === 401,
+      "old refresh token survived logout",
+    );
+  });
+
+  await scenario("rejects an expired refresh token", async () => {
+    const session = await login();
+    await sleep(4100);
+    assert(
+      (await rotate(session)) === 401,
+      "expired refresh token was accepted",
+    );
+  });
+
   await scenario(
-    "logout invalidates both access and refresh tokens",
+    "returns exactly one spelling of each token field",
     async () => {
-      const jar = new Map();
-      await login(jar);
-      const oldJar = new Map(jar);
+      const otpRes = await request("/auth/verify-otp", {
+        method: "POST",
+        json: {
+          mobileNumber: uniqueMobile(),
+          otp: "123456",
+          name: "Bearer Test User",
+        },
+      });
+      assert(otpRes.status === 200, "verify-otp failed");
+      const loginData = await otpRes.json();
+      assert(loginData.token_type === "Bearer", "token_type Bearer missing");
+      assert(loginData.access_token, "access_token missing");
+      assert(loginData.refresh_token, "refresh_token missing");
+      assert(typeof loginData.expires_in === "number", "expires_in missing");
+      for (const alias of ["accessToken", "refreshToken", "tokens"]) {
+        assert(!(alias in loginData), `unexpected duplicate field ${alias}`);
+      }
+
+      const profileRes = await request("/students/profile", {
+        token: loginData.access_token,
+      });
       assert(
-        (await request("/auth/logout", { jar, method: "POST" })).status === 200,
-        "logout failed",
+        profileRes.status === 200,
+        `expected 200 with a Bearer header, got ${profileRes.status}`,
       );
-      assert(jar.size === 0, "logout did not clear cookies");
+
+      // A Bearer header is NOT how the refresh token is presented.
+      const refreshBearer = await request("/auth/refresh", {
+        method: "POST",
+        token: loginData.refresh_token,
+      });
       assert(
-        (await request("/students/profile", { jar: oldJar })).status === 401,
-        "old access token survived logout",
+        refreshBearer.status === 401,
+        `expected 401 for a bearer-only refresh, got ${refreshBearer.status}`,
       );
+
+      const rotatedRes = await request("/auth/refresh", {
+        method: "POST",
+        json: { refresh_token: loginData.refresh_token },
+      });
+      assert(rotatedRes.status === 200, "refresh with a JSON body failed");
+      const rotated = await rotatedRes.json();
+      assert(rotated.access_token, "rotated access_token missing");
+
+      const afterRefresh = await request("/students/profile", {
+        token: rotated.access_token,
+      });
       assert(
-        (await request("/auth/refresh", { jar: oldJar, method: "POST" }))
-          .status === 401,
-        "old refresh token survived logout",
+        afterRefresh.status === 200,
+        "profile access with the rotated access token failed",
+      );
+
+      const refreshJson = await request("/auth/refresh", {
+        method: "POST",
+        json: { refresh_token: rotated.refresh_token },
+      });
+      assert(
+        refreshJson.status === 200,
+        "refresh with a JSON body refresh_token failed",
       );
     },
   );
 
-  await scenario("rejects an expired refresh token", async () => {
-    const jar = new Map();
-    await login(jar, "01700000000");
-    await new Promise((resolve) => setTimeout(resolve, 4100));
+  await scenario("sets no cookies on any auth response", async () => {
+    const response = await request("/auth/verify-otp", {
+      method: "POST",
+      json: {
+        mobileNumber: uniqueMobile(),
+        otp: "123456",
+        name: "Cookie Free",
+      },
+    });
+    assert(response.status === 200, "verify-otp failed");
     assert(
-      (await request("/auth/refresh", { jar, method: "POST" })).status === 401,
-      "expired refresh token was accepted",
+      (response.headers.getSetCookie?.() ?? []).length === 0,
+      "the API set a cookie",
     );
-    assert(jar.size === 0, "expired-session cookies were not cleared");
   });
 
   process.stdout.write(`\n${results.length} auth scenarios passed.\n`);

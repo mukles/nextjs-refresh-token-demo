@@ -6,38 +6,57 @@ import {
   HttpCode,
   Post,
   Req,
-  Res,
   UnauthorizedException,
+  UseGuards,
 } from "@nestjs/common";
 import {
-  ApiBody,
-  ApiCookieAuth,
+  ApiBearerAuth,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
 } from "@nestjs/swagger";
-import type { Request, Response } from "express";
+import type { Request } from "express";
 import {
   isValidBangladeshMobile,
   normalizeBangladeshMobile,
 } from "../common/mobile-number";
 import {
-  ACCESS_COOKIE,
   accessTokenTtlSeconds,
   AuthService,
-  REFRESH_COOKIE,
-  refreshTokenTtlSeconds,
+  type TokenPair,
 } from "./auth.service";
+import {
+  LoginRequestDto,
+  RefreshRequestDto,
+  SendOtpRequestDto,
+  VerifyOtpRequestDto,
+} from "./dto/auth-request.dto";
+import {
+  AuthTokensResponseDto,
+  LoginResponseDto,
+  LogoutResponseDto,
+  MeResponseDto,
+  RefreshResponseDto,
+  SendOtpResponseDto,
+  VerifyOtpResponseDto,
+} from "./dto/auth-response.dto";
+import { JwtAuthGuard } from "./jwt-auth.guard";
 
-type Credentials = { email?: string; password?: string };
-type OtpRequest = { mobileNumber?: string; otp?: string; name?: string };
+function tokensResponse(tokens: TokenPair): AuthTokensResponseDto {
+  return {
+    token_type: "Bearer",
+    access_token: tokens.accessToken,
+    refresh_token: tokens.refreshToken,
+    expires_in: accessTokenTtlSeconds(),
+  };
+}
 
-function readCookie(request: Request, name: string): string | undefined {
-  const cookie = request.headers.cookie
-    ?.split(";")
-    .map((part) => part.trim())
-    .find((part) => part.startsWith(`${name}=`));
-  return cookie ? decodeURIComponent(cookie.slice(name.length + 1)) : undefined;
+function requireMobileNumber(value: string): string {
+  const mobileNumber = normalizeBangladeshMobile(value);
+  if (!isValidBangladeshMobile(mobileNumber)) {
+    throw new BadRequestException("Enter a valid Bangladesh mobile number");
+  }
+  return mobileNumber;
 }
 
 @ApiTags("auth")
@@ -48,145 +67,68 @@ export class AuthController {
   @Post("login")
   @HttpCode(200)
   @ApiOperation({ summary: "Sign in with email and password" })
-  async login(
-    @Body() body: Credentials,
-    @Res({ passthrough: true }) response: Response,
-  ) {
-    if (!body.email || !body.password) {
-      throw new BadRequestException("Email and password are required");
-    }
+  @ApiOkResponse({ type: LoginResponseDto })
+  async login(@Body() body: LoginRequestDto): Promise<LoginResponseDto> {
     const result = await this.authService.login(body.email, body.password);
-    this.setAuthCookies(response, result.tokens);
-    return result.body;
+    return { user: result.user, ...tokensResponse(result.tokens) };
   }
 
   @Post("send-otp")
   @HttpCode(200)
   @ApiOperation({ summary: "Send a student login OTP" })
-  @ApiBody({ schema: { example: { mobileNumber: "01XXXXXXXXX" } } })
-  sendOtp(@Body() body: OtpRequest) {
-    if (!body.mobileNumber) {
-      throw new BadRequestException("mobileNumber is required");
-    }
-    const mobileNumber = normalizeBangladeshMobile(body.mobileNumber);
-    if (!isValidBangladeshMobile(mobileNumber)) {
-      throw new BadRequestException("Enter a valid Bangladesh mobile number");
-    }
-    return this.authService.sendOtp(mobileNumber);
+  @ApiOkResponse({ type: SendOtpResponseDto })
+  sendOtp(@Body() body: SendOtpRequestDto): SendOtpResponseDto {
+    return this.authService.sendOtp(requireMobileNumber(body.mobileNumber));
   }
 
   @Post("verify-otp")
   @HttpCode(200)
   @ApiOperation({ summary: "Verify OTP and create an authenticated session" })
+  @ApiOkResponse({ type: VerifyOtpResponseDto })
   async verifyOtp(
-    @Body() body: OtpRequest,
-    @Res({ passthrough: true }) response: Response,
-  ) {
-    if (!body.mobileNumber || !body.otp) {
-      throw new BadRequestException("mobileNumber and otp are required");
-    }
-    const mobileNumber = normalizeBangladeshMobile(body.mobileNumber);
-    if (!isValidBangladeshMobile(mobileNumber)) {
-      throw new BadRequestException("Enter a valid Bangladesh mobile number");
-    }
+    @Body() body: VerifyOtpRequestDto,
+  ): Promise<VerifyOtpResponseDto> {
     const result = await this.authService.verifyOtp(
-      mobileNumber,
+      requireMobileNumber(body.mobileNumber),
       body.otp,
       body.name,
     );
-    this.setAuthCookies(response, result.tokens);
-    return { success: true, message: result.body.message };
+    return {
+      success: true,
+      message: result.message,
+      ...tokensResponse(result.tokens),
+    };
   }
 
   @Post("refresh")
   @HttpCode(200)
-  @ApiCookieAuth(REFRESH_COOKIE)
   @ApiOperation({ summary: "Rotate the refresh token" })
-  async refresh(
-    @Req() request: Request,
-    @Res({ passthrough: true }) response: Response,
-  ) {
-    const refreshToken = readCookie(request, REFRESH_COOKIE);
-    if (!refreshToken) {
-      this.clearAuthCookies(response);
+  @ApiOkResponse({ type: RefreshResponseDto })
+  async refresh(@Body() body: RefreshRequestDto): Promise<RefreshResponseDto> {
+    if (!body.refresh_token) {
       throw new UnauthorizedException("No refresh token");
     }
-    try {
-      const tokens = await this.authService.refresh(refreshToken);
-      this.setAuthCookies(response, tokens);
-      return { refreshed: true };
-    } catch (error) {
-      this.clearAuthCookies(response);
-      throw error;
-    }
+    const tokens = await this.authService.refresh(body.refresh_token);
+    return { refreshed: true, ...tokensResponse(tokens) };
   }
 
   @Post("logout")
   @HttpCode(200)
-  @ApiOperation({ summary: "Revoke and clear the current session" })
-  async logout(
-    @Req() request: Request,
-    @Res({ passthrough: true }) response: Response,
-  ) {
-    await this.authService.logout(readCookie(request, REFRESH_COOKIE));
-    this.clearAuthCookies(response);
+  @ApiOperation({ summary: "Revoke the current session" })
+  @ApiOkResponse({ type: LogoutResponseDto })
+  async logout(@Body() body: RefreshRequestDto): Promise<LogoutResponseDto> {
+    await this.authService.logout(body.refresh_token);
     return { ok: true };
   }
 
-  @Get("session")
-  @ApiOkResponse({
-    schema: {
-      example: { hasAccessToken: true, hasRefreshToken: true },
-    },
-  })
-  session(@Req() request: Request) {
-    return {
-      hasAccessToken: Boolean(readCookie(request, ACCESS_COOKIE)),
-      hasRefreshToken: Boolean(readCookie(request, REFRESH_COOKIE)),
-    };
-  }
-
   @Get("me")
-  @ApiCookieAuth(ACCESS_COOKIE)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: "Get the authenticated student" })
-  getMe(@Req() request: Request) {
-    const token = readCookie(request, ACCESS_COOKIE);
+  @ApiOkResponse({ type: MeResponseDto })
+  getMe(@Req() request: Request): Promise<MeResponseDto> {
+    const token = request.accessToken;
     if (!token) throw new UnauthorizedException("Access token missing");
     return this.authService.getMe(token);
-  }
-
-  private setAuthCookies(
-    response: Response,
-    tokens: {
-      accessToken: string;
-      refreshToken: string;
-    },
-  ) {
-    const secure = process.env.NODE_ENV === "production";
-    response.cookie(ACCESS_COOKIE, tokens.accessToken, {
-      httpOnly: true,
-      secure,
-      sameSite: "lax",
-      path: "/",
-      maxAge: accessTokenTtlSeconds() * 1000,
-    });
-    response.cookie(REFRESH_COOKIE, tokens.refreshToken, {
-      httpOnly: true,
-      secure,
-      sameSite: "lax",
-      path: "/",
-      maxAge: refreshTokenTtlSeconds() * 1000,
-    });
-  }
-
-  private clearAuthCookies(response: Response) {
-    const options = {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax" as const,
-      path: "/",
-    };
-    response.clearCookie(ACCESS_COOKIE, options);
-    response.clearCookie(REFRESH_COOKIE, options);
   }
 }

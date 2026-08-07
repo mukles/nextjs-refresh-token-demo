@@ -1,11 +1,9 @@
-import { Logger } from "@nestjs/common";
+import { Logger, ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
-import cookieParser from "cookie-parser";
 import { config } from "dotenv";
 import type { NextFunction, Request, Response } from "express";
 import { AppModule } from "./app.module";
-import { ACCESS_COOKIE, REFRESH_COOKIE } from "./auth/auth.service";
 
 const localEnv = config({
   path: ".env.local",
@@ -31,19 +29,23 @@ async function bootstrap() {
     });
     next();
   });
-  app.use(cookieParser());
   app.enableCors({
     origin: process.env.WEB_ORIGIN ?? "http://localhost:3000",
-    credentials: true,
   });
   app.setGlobalPrefix("api/v1");
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+      transformOptions: { enableImplicitConversion: false },
+    }),
+  );
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle("Refresh Token Demo API")
     .setDescription("OpenAPI documentation for the NestJS backend")
     .setVersion("1.0")
-    .addCookieAuth(ACCESS_COOKIE, { type: "apiKey", in: "cookie" })
-    .addCookieAuth(REFRESH_COOKIE, { type: "apiKey", in: "cookie" })
+    .addBearerAuth({ type: "http", scheme: "bearer", bearerFormat: "JWT" })
     .build();
   const documentFactory = () =>
     SwaggerModule.createDocument(app, swaggerConfig);

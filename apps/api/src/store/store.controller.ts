@@ -6,117 +6,125 @@ import {
   Param,
   Patch,
   Post,
-  Req,
-  UnauthorizedException,
+  UseGuards,
 } from "@nestjs/common";
-import { ApiCookieAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
-import type { Request } from "express";
-import { ACCESS_COOKIE, AuthService } from "../auth/auth.service";
+import {
+  ApiBearerAuth,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+} from "@nestjs/swagger";
+import type { AuthenticatedUser } from "../auth/auth.service";
+import { CurrentUser } from "../auth/current-user.decorator";
+import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import {
+  AddCartItemRequestDto,
+  AddCommentRequestDto,
+  CheckoutRequestDto,
+  UpdateCartItemRequestDto,
+} from "./dto/store-request.dto";
+import {
+  CartItemResponseDto,
+  CheckoutResponseDto,
+  OrderResponseDto,
+  ProductDetailResponseDto,
+  ProductResponseDto,
+} from "./dto/store-response.dto";
 import { StoreService } from "./store.service";
 
 @ApiTags("store")
-@ApiCookieAuth(ACCESS_COOKIE)
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
 @Controller("store")
 export class StoreController {
-  constructor(
-    private readonly store: StoreService,
-    private readonly auth: AuthService,
-  ) {}
+  constructor(private readonly store: StoreService) {}
 
   @Get("products")
   @ApiOperation({ summary: "List products for an authenticated shopper" })
-  async listProducts(@Req() req: Request) {
-    await this.userId(req);
+  @ApiOkResponse({ type: [ProductResponseDto] })
+  listProducts() {
     return this.store.listProducts();
   }
 
   @Get("products/featured")
-  async listFeaturedProducts(@Req() req: Request) {
-    await this.userId(req);
+  @ApiOkResponse({ type: [ProductResponseDto] })
+  listFeaturedProducts() {
     return this.store.listFeaturedProducts();
   }
 
   @Get("categories/:category")
-  async listProductsByCategory(
-    @Req() req: Request,
-    @Param("category") category: string,
-  ) {
-    await this.userId(req);
+  @ApiOkResponse({ type: [ProductResponseDto] })
+  listProductsByCategory(@Param("category") category: string) {
     return this.store.listProductsByCategory(category);
   }
 
   @Get("products/:sku")
-  async getProduct(@Req() req: Request, @Param("sku") sku: string) {
-    await this.userId(req);
+  @ApiOkResponse({ type: ProductDetailResponseDto })
+  getProduct(@Param("sku") sku: string) {
     return this.store.getProduct(sku);
   }
 
   @Post("products/:sku/comments")
-  async addComment(
-    @Req() req: Request,
+  addComment(
+    @CurrentUser() user: AuthenticatedUser,
     @Param("sku") sku: string,
-    @Body() body: { rating?: unknown; comment?: unknown },
+    @Body() body: AddCommentRequestDto,
   ) {
-    const profile = await this.userProfile(req);
-    return this.store.addComment(sku, { ...body, name: profile.name });
+    return this.store.addComment(sku, { ...body, name: user.name });
   }
 
-  @Get("cart") async getCart(@Req() req: Request) {
-    return this.store.getCart(await this.userId(req));
-  }
-  @Post("cart/items") async addItem(
-    @Req() req: Request,
-    @Body() body: { productId: string; quantity: number },
-  ) {
-    return this.store.addCartItem(
-      await this.userId(req),
-      body.productId,
-      Number(body.quantity),
-    );
-  }
-  @Patch("cart/items/:sku") async updateItem(
-    @Req() req: Request,
-    @Param("sku") sku: string,
-    @Body() body: { quantity: number },
-  ) {
-    return this.store.updateCartItem(
-      await this.userId(req),
-      sku,
-      Number(body.quantity),
-    );
-  }
-  @Delete("cart/items/:sku") async removeItem(
-    @Req() req: Request,
-    @Param("sku") sku: string,
-  ) {
-    return this.store.removeCartItem(await this.userId(req), sku);
-  }
-  @Delete("cart") async clear(@Req() req: Request) {
-    return this.store.clearCart(await this.userId(req));
-  }
-  @Get("orders") async listOrders(@Req() req: Request) {
-    return this.store.listOrders(await this.userId(req));
-  }
-  @Post("checkout") async checkout(
-    @Req() req: Request,
-    @Body()
-    body: {
-      customerName?: unknown;
-      mobileNumber?: unknown;
-      deliveryAddress?: unknown;
-      paymentMethod?: unknown;
-    },
-  ) {
-    return this.store.checkout(await this.userId(req), body);
+  @Get("cart")
+  @ApiOkResponse({ type: [CartItemResponseDto] })
+  getCart(@CurrentUser() user: AuthenticatedUser) {
+    return this.store.getCart(user._id);
   }
 
-  private async userId(req: Request) {
-    return (await this.userProfile(req))._id;
+  @Post("cart/items")
+  @ApiOkResponse({ type: [CartItemResponseDto] })
+  addItem(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: AddCartItemRequestDto,
+  ) {
+    return this.store.addCartItem(user._id, body);
   }
 
-  private async userProfile(req: Request) {
-    const token = req.cookies?.[ACCESS_COOKIE] as string | undefined;
-    if (!token) throw new UnauthorizedException("Access token missing");
-    return this.auth.getProfile(token);
+  @Patch("cart/items/:sku")
+  @ApiOkResponse({ type: [CartItemResponseDto] })
+  updateItem(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("sku") sku: string,
+    @Body() body: UpdateCartItemRequestDto,
+  ) {
+    return this.store.updateCartItem(user._id, sku, body.quantity);
+  }
+
+  @Delete("cart/items/:sku")
+  @ApiOkResponse({ type: [CartItemResponseDto] })
+  removeItem(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("sku") sku: string,
+  ) {
+    return this.store.removeCartItem(user._id, sku);
+  }
+
+  @Delete("cart")
+  @ApiOkResponse({ type: [CartItemResponseDto] })
+  clear(@CurrentUser() user: AuthenticatedUser) {
+    return this.store.clearCart(user._id);
+  }
+
+  @Get("orders")
+  @ApiOkResponse({ type: [OrderResponseDto] })
+  listOrders(@CurrentUser() user: AuthenticatedUser) {
+    return this.store.listOrders(user._id);
+  }
+
+  @Post("checkout")
+  @ApiOkResponse({ type: CheckoutResponseDto })
+  checkout(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: CheckoutRequestDto,
+  ) {
+    return this.store.checkout(user._id, body);
   }
 }
