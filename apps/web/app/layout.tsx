@@ -6,7 +6,14 @@ import { AuthProvider } from "@/features/auth/auth-context";
 import { PromotionalModal } from "@/components/promotional-modal";
 import "./globals.css";
 
+const siteUrl =
+  process.env.NEXT_PUBLIC_SITE_URL ??
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : "http://localhost:3000");
+
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: {
     default: "ShobShop — Everyday favourites",
     template: "%s | ShobShop",
