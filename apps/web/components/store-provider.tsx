@@ -102,7 +102,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     ),
     async addToCart(product, quantity = 1) {
       if (!product.inStock) return;
-      const added = await mutateCart(
+      const mutation = mutateCart(
         (items) => {
           const existing = items.find((line) => line.product.id === product.id);
           return existing
@@ -120,7 +120,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           }),
         "Could not add item",
       );
-      if (added) toast.success(`${product.name} added to cart`);
+      toast.success(`${product.name} added to cart`);
+      await mutation;
     },
     async updateQuantity(id, quantity) {
       const nextQuantity = Math.max(1, quantity);
