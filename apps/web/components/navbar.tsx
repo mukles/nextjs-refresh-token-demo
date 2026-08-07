@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { LogOut, ShoppingBag, Store } from "lucide-react";
+import { Loader2, LogOut, ShoppingBag, Store } from "lucide-react";
 import { useStore } from "./store-provider";
 import { useAuth } from "@/features/auth/auth-context";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AccessTokenCountdown } from "./access-token-countdown";
 
 const categories = ["Electronics", "Accessories", "Home", "Bags", "Footwear"];
@@ -15,6 +15,20 @@ export function Navbar() {
   const { user, logout } = useAuth();
   const pathname = usePathname();
   const [activeHash, setActiveHash] = useState("");
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const logoutPending = useRef(false);
+
+  async function handleLogout() {
+    if (logoutPending.current) return;
+    logoutPending.current = true;
+    setIsLoggingOut(true);
+    try {
+      await logout();
+    } finally {
+      logoutPending.current = false;
+      setIsLoggingOut(false);
+    }
+  }
 
   useEffect(() => {
     const syncHash = () => setActiveHash(window.location.hash);
@@ -81,11 +95,16 @@ export function Navbar() {
           {user ? (
             <button
               type="button"
-              onClick={logout}
-              className="grid size-10 place-items-center rounded-full text-stone-500 hover:bg-stone-100 hover:text-red-600"
-              aria-label="Log out"
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+              className="grid size-10 place-items-center rounded-full text-stone-500 hover:bg-stone-100 hover:text-red-600 disabled:cursor-wait disabled:bg-stone-100 disabled:text-stone-500"
+              aria-label={isLoggingOut ? "Logging out" : "Log out"}
             >
-              <LogOut className="size-4" />
+              {isLoggingOut ? (
+                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <LogOut className="size-4" aria-hidden="true" />
+              )}
             </button>
           ) : (
             <Link
