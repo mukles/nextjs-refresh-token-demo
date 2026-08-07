@@ -6,23 +6,49 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/features/auth/auth-context";
 
+const PROMOTION_STORAGE_KEY = "shobshop:promotion:last-shown";
+
+function getLocalDateKey() {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export function PromotionalModal() {
   const { user } = useAuth();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const shown = useRef(false);
+  const shown = useRef<string | null>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (
-      !user ||
-      shown.current ||
-      pathname === "/login" ||
-      pathname === "/register"
-    )
+    if (!user || pathname === "/login" || pathname === "/register")
       return;
-    shown.current = true;
-    const timeout = setTimeout(() => setOpen(true), 700);
+
+    const today = getLocalDateKey();
+    const displayKey = `${PROMOTION_STORAGE_KEY}:${today}`;
+    if (shown.current === displayKey) return;
+
+    try {
+      if (window.localStorage.getItem(PROMOTION_STORAGE_KEY) === today) {
+        shown.current = displayKey;
+        return;
+      }
+    } catch {
+      // The in-memory guard still prevents repeats when storage is unavailable.
+    }
+
+    shown.current = displayKey;
+    const timeout = setTimeout(() => {
+      try {
+        window.localStorage.setItem(PROMOTION_STORAGE_KEY, today);
+      } catch {
+        // The promotion can still be shown when storage is unavailable.
+      }
+      setOpen(true);
+    }, 700);
     return () => clearTimeout(timeout);
   }, [pathname, user]);
 
