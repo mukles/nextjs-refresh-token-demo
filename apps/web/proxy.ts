@@ -22,8 +22,8 @@ export async function proxy(request: NextRequest) {
 
   if (claims && !isExpired) {
     const callbackUrl = request.nextUrl.searchParams.get("callbackUrl") || "/";
-
-    return NextResponse.redirect(isAuthRoute(request) ? "/" : callbackUrl);
+    const target = isAuthRoute(request) ? "/" : callbackUrl;
+    return NextResponse.redirect(new URL(target, request.url));
   }
 
   if (isExpired && request.cookies.has(REFRESH_COOKIE)) {
