@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 const renderLinks = [
   { href: "/dashboard", label: "Client rendering" },
   { href: "/dashboard/server", label: "Server rendering" },
+  { href: "/dashboard/server-slow", label: "Slow SSR test" },
   { href: "/dashboard/settings", label: "Profile settings" },
 ];
 
