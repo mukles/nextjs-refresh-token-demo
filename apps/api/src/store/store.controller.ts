@@ -94,6 +94,9 @@ export class StoreController {
   @Delete("cart") async clear(@Req() req: Request) {
     return this.store.clearCart(await this.userId(req));
   }
+  @Get("orders") async listOrders(@Req() req: Request) {
+    return this.store.listOrders(await this.userId(req));
+  }
   @Post("checkout") async checkout(
     @Req() req: Request,
     @Body()

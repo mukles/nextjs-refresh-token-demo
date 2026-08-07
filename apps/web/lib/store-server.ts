@@ -3,7 +3,7 @@ import "server-only";
 import { connection } from "next/server";
 import { backendFetch } from "@/lib/backend";
 import { createServerBackendTransport } from "@/lib/backend-server";
-import type { DetailedProduct, Product } from "@/lib/store-types";
+import type { DetailedProduct, Order, Product } from "@/lib/store-types";
 
 export async function getStoreProducts() {
   await connection();
@@ -54,6 +54,19 @@ export async function getStoreProduct(id: string) {
     `/store/products/${encodeURIComponent(id)}`,
     undefined,
     "Product is unavailable",
+  );
+  if (!result.ok) throw result.error;
+  return result.data;
+}
+
+export async function getStoreOrders() {
+  await connection();
+  const transport = await createServerBackendTransport();
+  const result = await backendFetch<Order[]>(
+    transport,
+    "/store/orders",
+    undefined,
+    "Orders are unavailable",
   );
   if (!result.ok) throw result.error;
   return result.data;

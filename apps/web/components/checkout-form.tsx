@@ -65,12 +65,20 @@ export function CheckoutForm() {
             Total: {formatBDT(order.total)}
           </p>
         </div>
-        <Link
-          href="/"
-          className="mt-7 rounded-xl bg-orange-600 px-5 py-3 font-bold text-white hover:bg-orange-700"
-        >
-          Continue Shopping
-        </Link>
+        <div className="mt-7 flex flex-wrap justify-center gap-3">
+          <Link
+            href="/orders"
+            className="rounded-xl border border-orange-200 px-5 py-3 font-bold text-orange-700 hover:bg-orange-50"
+          >
+            View orders
+          </Link>
+          <Link
+            href="/"
+            className="rounded-xl bg-orange-600 px-5 py-3 font-bold text-white hover:bg-orange-700"
+          >
+            Continue Shopping
+          </Link>
+        </div>
       </main>
     );
   if (!hydrated)

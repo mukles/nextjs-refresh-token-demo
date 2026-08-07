@@ -102,6 +102,7 @@ export const config = {
     "/categories/:path*",
     "/cart",
     "/checkout",
+    "/orders",
     "/dashboard/:path*",
     "/login",
     "/register",

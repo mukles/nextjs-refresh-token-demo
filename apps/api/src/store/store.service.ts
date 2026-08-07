@@ -151,6 +151,27 @@ export class StoreService {
     return [];
   }
 
+  async listOrders(userId: string) {
+    const orders = await this.prisma.order.findMany({
+      where: { userId },
+      include: { items: { orderBy: { id: "asc" } } },
+      orderBy: { createdAt: "desc" },
+    });
+    return orders.map((order) => ({
+      orderNumber: order.orderNumber,
+      customerName: order.customerName,
+      deliveryAddress: order.deliveryAddress,
+      paymentMethod: order.paymentMethod,
+      total: order.total,
+      createdAt: order.createdAt.toISOString(),
+      items: order.items.map((item) => ({
+        name: item.name,
+        unitPrice: item.unitPrice,
+        quantity: item.quantity,
+      })),
+    }));
+  }
+
   async checkout(
     userId: string,
     body: {

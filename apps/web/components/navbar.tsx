@@ -53,6 +53,14 @@ export function Navbar() {
             Products
           </Link>
           {user && (
+            <Link
+              href="/orders"
+              className="hidden text-sm font-semibold text-stone-600 hover:text-orange-600 sm:block"
+            >
+              Orders
+            </Link>
+          )}
+          {user && (
             <div className="hidden items-center gap-2 md:flex">
               <span className="text-sm text-stone-500">
                 Hi, <strong className="text-stone-800">{user.name}</strong>

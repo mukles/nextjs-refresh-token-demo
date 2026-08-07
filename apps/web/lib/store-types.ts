@@ -14,6 +14,16 @@ export type Product = {
 
 export type CartLine = { product: Product; quantity: number };
 
+export type Order = {
+  orderNumber: string;
+  customerName: string;
+  deliveryAddress: string;
+  paymentMethod: string;
+  total: number;
+  createdAt: string;
+  items: Array<{ name: string; unitPrice: number; quantity: number }>;
+};
+
 export type ProductComment = {
   id: string;
   name: string;
