@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import { Loader2, LogOut, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,24 @@ const renderLinks = [
   { href: "/dashboard/server-slow", label: "Slow SSR test" },
   { href: "/dashboard/settings", label: "Profile settings" },
 ];
+
+function NavigationLinkLabel({ label }: { label: string }) {
+  const { pending } = useLinkStatus();
+
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <Loader2
+        aria-hidden="true"
+        className={cn(
+          "size-3.5 shrink-0",
+          pending ? "animate-spin opacity-100" : "opacity-0",
+        )}
+      />
+      <span>{label}</span>
+      {pending && <span className="sr-only">Loading</span>}
+    </span>
+  );
+}
 
 export function SiteHeader() {
   const pathname = usePathname();
@@ -46,7 +64,7 @@ export function SiteHeader() {
                     : "text-muted-foreground",
                 )}
               >
-                {link.label}
+                <NavigationLinkLabel label={link.label} />
               </Link>
             );
           })}
