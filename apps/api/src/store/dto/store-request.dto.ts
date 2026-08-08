@@ -1,6 +1,7 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { Transform } from "class-transformer";
 import { IsIn, IsInt, IsString, Length, Max, Min } from "class-validator";
+import { IsBangladeshMobile } from "../../common/mobile-number";
 
 const trim = ({ value }: { value: unknown }) =>
   typeof value === "string" ? value.trim() : value;
@@ -57,7 +58,7 @@ export class CheckoutRequestDto {
   customerName!: string;
 
   @ApiProperty({ example: "01712345678" })
-  @IsString({ message: "Enter a valid Bangladesh mobile number" })
+  @IsBangladeshMobile()
   mobileNumber!: string;
 
   @ApiProperty({ example: "House 1, Road 2, Dhaka" })

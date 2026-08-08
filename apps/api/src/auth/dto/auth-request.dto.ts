@@ -7,6 +7,7 @@ import {
   IsString,
   Length,
 } from "class-validator";
+import { IsBangladeshMobile } from "../../common/mobile-number";
 
 const trim = ({ value }: { value: unknown }) =>
   typeof value === "string" ? value.trim() : value;
@@ -24,15 +25,13 @@ export class LoginRequestDto {
 
 export class SendOtpRequestDto {
   @ApiProperty({ example: "01712345678" })
-  @IsString()
-  @IsNotEmpty({ message: "mobileNumber is required" })
+  @IsBangladeshMobile()
   mobileNumber!: string;
 }
 
 export class VerifyOtpRequestDto {
   @ApiProperty({ example: "01712345678" })
-  @IsString()
-  @IsNotEmpty({ message: "mobileNumber is required" })
+  @IsBangladeshMobile()
   mobileNumber!: string;
 
   @ApiProperty({ example: "123456" })

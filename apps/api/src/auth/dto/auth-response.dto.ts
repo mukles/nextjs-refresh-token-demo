@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { accessTokenTtlSeconds, type TokenPair } from "../token-config";
 
 export class AuthTokensResponseDto {
   @ApiProperty({ example: "Bearer" }) token_type!: string;
@@ -6,6 +7,16 @@ export class AuthTokensResponseDto {
   @ApiProperty() refresh_token!: string;
   @ApiProperty({ example: 60, description: "Access token lifetime in seconds" })
   expires_in!: number;
+
+  /** Shapes an internal {@link TokenPair} into the OAuth-style wire format. */
+  static from(tokens: TokenPair): AuthTokensResponseDto {
+    return {
+      token_type: "Bearer",
+      access_token: tokens.accessToken,
+      refresh_token: tokens.refreshToken,
+      expires_in: accessTokenTtlSeconds(),
+    };
+  }
 }
 
 export class UserSummaryDto {

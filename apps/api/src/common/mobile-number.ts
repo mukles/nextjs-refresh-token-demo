@@ -1,3 +1,9 @@
+import { applyDecorators } from "@nestjs/common";
+import { Transform } from "class-transformer";
+import { Matches } from "class-validator";
+
+const BANGLADESH_MOBILE = /^01[3-9]\d{8}$/;
+
 export function normalizeBangladeshMobile(value: string) {
   const compact = value.replace(/[\s()-]/g, "");
 
@@ -8,5 +14,17 @@ export function normalizeBangladeshMobile(value: string) {
 }
 
 export function isValidBangladeshMobile(value: string) {
-  return /^01[3-9]\d{8}$/.test(normalizeBangladeshMobile(value));
+  return BANGLADESH_MOBILE.test(normalizeBangladeshMobile(value));
+}
+
+/** Normalizes `+880`/`880`/spacing into `01XXXXXXXXX`, then validates it. */
+export function IsBangladeshMobile() {
+  return applyDecorators(
+    Transform(({ value }: { value: unknown }) =>
+      typeof value === "string" ? normalizeBangladeshMobile(value) : value,
+    ),
+    Matches(BANGLADESH_MOBILE, {
+      message: "Enter a valid Bangladesh mobile number",
+    }),
+  );
 }

@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Get,
@@ -16,15 +15,7 @@ import {
   ApiTags,
 } from "@nestjs/swagger";
 import type { Request } from "express";
-import {
-  isValidBangladeshMobile,
-  normalizeBangladeshMobile,
-} from "../common/mobile-number";
-import {
-  accessTokenTtlSeconds,
-  AuthService,
-  type TokenPair,
-} from "./auth.service";
+import { AuthService } from "./auth.service";
 import {
   LoginRequestDto,
   RefreshRequestDto,
@@ -42,23 +33,6 @@ import {
 } from "./dto/auth-response.dto";
 import { JwtAuthGuard } from "./jwt-auth.guard";
 
-function tokensResponse(tokens: TokenPair): AuthTokensResponseDto {
-  return {
-    token_type: "Bearer",
-    access_token: tokens.accessToken,
-    refresh_token: tokens.refreshToken,
-    expires_in: accessTokenTtlSeconds(),
-  };
-}
-
-function requireMobileNumber(value: string): string {
-  const mobileNumber = normalizeBangladeshMobile(value);
-  if (!isValidBangladeshMobile(mobileNumber)) {
-    throw new BadRequestException("Enter a valid Bangladesh mobile number");
-  }
-  return mobileNumber;
-}
-
 @ApiTags("auth")
 @Controller("auth")
 export class AuthController {
@@ -70,7 +44,7 @@ export class AuthController {
   @ApiOkResponse({ type: LoginResponseDto })
   async login(@Body() body: LoginRequestDto): Promise<LoginResponseDto> {
     const result = await this.authService.login(body.email, body.password);
-    return { user: result.user, ...tokensResponse(result.tokens) };
+    return { user: result.user, ...AuthTokensResponseDto.from(result.tokens) };
   }
 
   @Post("send-otp")
@@ -78,7 +52,7 @@ export class AuthController {
   @ApiOperation({ summary: "Send a student login OTP" })
   @ApiOkResponse({ type: SendOtpResponseDto })
   sendOtp(@Body() body: SendOtpRequestDto): SendOtpResponseDto {
-    return this.authService.sendOtp(requireMobileNumber(body.mobileNumber));
+    return this.authService.sendOtp(body.mobileNumber);
   }
 
   @Post("verify-otp")
@@ -89,14 +63,14 @@ export class AuthController {
     @Body() body: VerifyOtpRequestDto,
   ): Promise<VerifyOtpResponseDto> {
     const result = await this.authService.verifyOtp(
-      requireMobileNumber(body.mobileNumber),
+      body.mobileNumber,
       body.otp,
       body.name,
     );
     return {
       success: true,
       message: result.message,
-      ...tokensResponse(result.tokens),
+      ...AuthTokensResponseDto.from(result.tokens),
     };
   }
 
@@ -109,7 +83,7 @@ export class AuthController {
       throw new UnauthorizedException("No refresh token");
     }
     const tokens = await this.authService.refresh(body.refresh_token);
-    return { refreshed: true, ...tokensResponse(tokens) };
+    return { refreshed: true, ...AuthTokensResponseDto.from(tokens) };
   }
 
   @Post("logout")

@@ -5,10 +5,6 @@ import {
 } from "@nestjs/common";
 import type { Product } from "@prisma/client";
 import { randomBytes } from "node:crypto";
-import {
-  isValidBangladeshMobile,
-  normalizeBangladeshMobile,
-} from "../common/mobile-number";
 import type {
   AddCartItemRequestDto,
   AddCommentRequestDto,
@@ -145,10 +141,6 @@ export class StoreService {
     userId: string,
     body: CheckoutRequestDto,
   ): Promise<CheckoutResponseDto> {
-    const mobileNumber = normalizeBangladeshMobile(body.mobileNumber);
-    if (!isValidBangladeshMobile(mobileNumber))
-      throw new BadRequestException("Enter a valid Bangladesh mobile number");
-
     const cart = await this.store.findOrCreateCart(userId);
     const items = await this.store.listCartItems(cart.id);
     if (!items.length) throw new BadRequestException("Your cart is empty");
@@ -162,7 +154,7 @@ export class StoreService {
         .toString("hex")
         .toUpperCase()}`,
       customerName: body.customerName,
-      mobileNumber,
+      mobileNumber: body.mobileNumber,
       deliveryAddress: body.deliveryAddress,
       paymentMethod: body.paymentMethod,
       total,
